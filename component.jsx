@@ -19,7 +19,16 @@ const WatermarkResizeApp = () => {
     shadowColor: '#000000',
     shadowOpacity: 0.5,
     shadowOffsetX: 2,
-    shadowOffsetY: 2
+    shadowOffsetY: 2,
+    // Novas configurações para texto e padrão
+    watermarkType: 'image', // 'image' ou 'text' ou 'pattern'
+    textWatermark: 'SAMPLE',
+    textFont: 'Arial',
+    textSize: 48,
+    textColor: '#000000',
+    textRotation: -45,
+    patternSpacing: 200,
+    patternEnabled: false
   });
   const [previewMode, setPreviewMode] = useState('landscape');
   
@@ -111,14 +120,110 @@ const WatermarkResizeApp = () => {
         canvas.width = newWidth;
         canvas.height = newHeight;
         
-        // Calcular dimensões da imagem mantendo proporção
-        let drawWidth, drawHeight, x, y;
-        
-        // Desenhar a imagem redimensionada (seguindo lógica original)
+        // Desenhar a imagem primeiro
         ctx.drawImage(img, 0, 0, newWidth, newHeight);
         
-        // Aplicar marca d'água se existir
-        if (watermarkData) {
+        // Aplicar marca d'água baseado no tipo
+        if (config.watermarkType === 'text' && config.textWatermark) {
+          // Desenhar marca d'água de texto
+          ctx.save();
+          
+          // Configurar fonte e estilo
+          ctx.font = `${config.textSize}px ${config.textFont}`;
+          ctx.fillStyle = config.textColor;
+          ctx.globalAlpha = config.opacity;
+          
+          // Aplicar sombra se habilitada
+          if (config.shadowEnabled) {
+            ctx.shadowColor = config.shadowColor;
+            ctx.shadowBlur = config.shadowBlur;
+            ctx.shadowOffsetX = config.shadowOffsetX;
+            ctx.shadowOffsetY = config.shadowOffsetY;
+          }
+          
+          // Calcular posição do texto
+          const textMetrics = ctx.measureText(config.textWatermark);
+          const textWidth = textMetrics.width;
+          const textHeight = config.textSize;
+          
+          let textX, textY;
+          const margin = 20;
+          
+          switch (config.position) {
+            case 'top-left':
+              textX = margin;
+              textY = margin + textHeight;
+              break;
+            case 'top-right':
+              textX = newWidth - textWidth - margin;
+              textY = margin + textHeight;
+              break;
+            case 'bottom-left':
+              textX = margin;
+              textY = newHeight - margin;
+              break;
+            case 'bottom-right':
+              textX = newWidth - textWidth - margin;
+              textY = newHeight - margin;
+              break;
+            case 'bottom-center':
+              textX = (newWidth - textWidth) / 2;
+              textY = newHeight - margin;
+              break;
+            case 'center':
+              textX = (newWidth - textWidth) / 2;
+              textY = (newHeight + textHeight) / 2;
+              break;
+            default:
+              textX = newWidth - textWidth - margin;
+              textY = newHeight - margin;
+          }
+          
+          // Aplicar rotação se necessário
+          if (config.textRotation !== 0) {
+            ctx.translate(textX + textWidth / 2, textY - textHeight / 2);
+            ctx.rotate((config.textRotation * Math.PI) / 180);
+            ctx.fillText(config.textWatermark, -textWidth / 2, textHeight / 4);
+          } else {
+            ctx.fillText(config.textWatermark, textX, textY);
+          }
+          
+          ctx.restore();
+          
+        } else if (config.watermarkType === 'pattern' && config.textWatermark) {
+          // Desenhar padrão repetitivo diagonal
+          ctx.save();
+          
+          ctx.font = `${config.textSize}px ${config.textFont}`;
+          ctx.fillStyle = config.textColor;
+          ctx.globalAlpha = config.opacity;
+          
+          // Aplicar sombra se habilitada
+          if (config.shadowEnabled) {
+            ctx.shadowColor = config.shadowColor;
+            ctx.shadowBlur = config.shadowBlur;
+            ctx.shadowOffsetX = config.shadowOffsetX;
+            ctx.shadowOffsetY = config.shadowOffsetY;
+          }
+          
+          const spacing = config.patternSpacing;
+          const diagonal = Math.sqrt(newWidth * newWidth + newHeight * newHeight);
+          
+          // Criar padrão diagonal repetitivo
+          for (let i = -diagonal; i < diagonal; i += spacing) {
+            for (let j = -diagonal; j < diagonal; j += spacing) {
+              ctx.save();
+              ctx.translate(i, j);
+              ctx.rotate((config.textRotation * Math.PI) / 180);
+              ctx.fillText(config.textWatermark, 0, 0);
+              ctx.restore();
+            }
+          }
+          
+          ctx.restore();
+          
+        } else if (watermarkData && config.watermarkType === 'image') {
+          // Aplicar marca d'água de imagem
           const watermarkImg = new window.Image();
           watermarkImg.crossOrigin = 'anonymous';
           watermarkImg.onerror = () => reject(new Error('Erro ao carregar marca d\'água'));
@@ -184,7 +289,7 @@ const WatermarkResizeApp = () => {
               ctx.globalAlpha = config.shadowOpacity;
               
               // Desenhar sombra
-              ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+              ctx.drawImage(watermarkImg, watermarkX, watermarkY, logoWidth, logoHeight);
               
               // Limpar configurações de sombra
               ctx.shadowColor = 'transparent';
@@ -212,8 +317,10 @@ const WatermarkResizeApp = () => {
             }, 'image/jpeg', 0.9);
           };
           watermarkImg.src = watermarkData;
-        } else {
-          // Sem marca d'água, apenas converter para blob
+        }
+        
+        // Para texto e padrão, converter diretamente para blob
+        if (config.watermarkType === 'text' || config.watermarkType === 'pattern' || !watermarkData) {
           canvas.toBlob((blob) => {
             if (blob) {
               resolve(blob);
@@ -230,6 +337,17 @@ const WatermarkResizeApp = () => {
   const processImages = async () => {
     if (images.length === 0) {
       alert('Nenhuma imagem carregada para processar.');
+      return;
+    }
+    
+    // Validar se temos marca d'água configurada
+    if (config.watermarkType === 'image' && !watermark) {
+      alert('Selecione uma imagem para marca d\'água ou use o modo de texto.');
+      return;
+    }
+    
+    if ((config.watermarkType === 'text' || config.watermarkType === 'pattern') && !config.textWatermark.trim()) {
+      alert('Digite um texto para a marca d\'água.');
       return;
     }
 
@@ -346,13 +464,50 @@ const WatermarkResizeApp = () => {
                   Carregar Imagens
                 </button>
                 
-                <button
-                  onClick={() => watermarkInputRef.current?.click()}
-                  className="w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
-                >
-                  <ImageIcon className="w-5 h-5" />
-                  Carregar Marca D'água
-                </button>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setConfig(prev => ({ ...prev, watermarkType: 'image' }))}
+                      className={`px-3 py-2 text-xs rounded transition-colors ${
+                        config.watermarkType === 'image' 
+                          ? 'bg-purple-600 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      Imagem
+                    </button>
+                    <button
+                      onClick={() => setConfig(prev => ({ ...prev, watermarkType: 'text' }))}
+                      className={`px-3 py-2 text-xs rounded transition-colors ${
+                        config.watermarkType === 'text' 
+                          ? 'bg-purple-600 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      Texto
+                    </button>
+                    <button
+                      onClick={() => setConfig(prev => ({ ...prev, watermarkType: 'pattern' }))}
+                      className={`px-3 py-2 text-xs rounded transition-colors ${
+                        config.watermarkType === 'pattern' 
+                          ? 'bg-purple-600 text-white' 
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      Padrão
+                    </button>
+                  </div>
+                  
+                  {config.watermarkType === 'image' && (
+                    <button
+                      onClick={() => watermarkInputRef.current?.click()}
+                      className="w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ImageIcon className="w-5 h-5" />
+                      Carregar Marca D'água
+                    </button>
+                  )}
+                </div>
 
                 <input
                   ref={imageInputRef}
@@ -372,9 +527,156 @@ const WatermarkResizeApp = () => {
                 />
               </div>
 
-              {watermark && (
+              {config.watermarkType === 'text' && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Texto da Marca
+                    </label>
+                    <input
+                      type="text"
+                      value={config.textWatermark}
+                      onChange={(e) => setConfig(prev => ({ ...prev, textWatermark: e.target.value }))}
+                      placeholder="Digite o texto..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fonte
+                      </label>
+                      <select
+                        value={config.textFont}
+                        onChange={(e) => setConfig(prev => ({ ...prev, textFont: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="Arial">Arial</option>
+                        <option value="Arial Black">Arial Black</option>
+                        <option value="Helvetica">Helvetica</option>
+                        <option value="Times New Roman">Times</option>
+                        <option value="Verdana">Verdana</option>
+                        <option value="Impact">Impact</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tamanho: {config.textSize}px
+                      </label>
+                      <input
+                        type="range"
+                        min="12"
+                        max="120"
+                        value={config.textSize}
+                        onChange={(e) => setConfig(prev => ({ ...prev, textSize: parseInt(e.target.value) }))}
+                        className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cor do Texto
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={config.textColor}
+                          onChange={(e) => setConfig(prev => ({ ...prev, textColor: e.target.value }))}
+                          className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
+                        />
+                        <span className="text-xs text-gray-500">{config.textColor}</span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Rotação: {config.textRotation}°
+                      </label>
+                      <input
+                        type="range"
+                        min="-90"
+                        max="90"
+                        value={config.textRotation}
+                        onChange={(e) => setConfig(prev => ({ ...prev, textRotation: parseInt(e.target.value) }))}
+                        className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {config.watermarkType === 'pattern' && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Texto do Padrão
+                    </label>
+                    <input
+                      type="text"
+                      value={config.textWatermark}
+                      onChange={(e) => setConfig(prev => ({ ...prev, textWatermark: e.target.value }))}
+                      placeholder="SAMPLE"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Espaçamento: {config.patternSpacing}px
+                    </label>
+                    <input
+                      type="range"
+                      min="100"
+                      max="400"
+                      value={config.patternSpacing}
+                      onChange={(e) => setConfig(prev => ({ ...prev, patternSpacing: parseInt(e.target.value) }))}
+                      className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tamanho: {config.textSize}px
+                      </label>
+                      <input
+                        type="range"
+                        min="24"
+                        max="80"
+                        value={config.textSize}
+                        onChange={(e) => setConfig(prev => ({ ...prev, textSize: parseInt(e.target.value) }))}
+                        className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cor do Texto
+                      </label>
+                      <input
+                        type="color"
+                        value={config.textColor}
+                        onChange={(e) => setConfig(prev => ({ ...prev, textColor: e.target.value }))}
+                        className="w-8 h-8 rounded border border-gray-300 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {watermark && config.watermarkType === 'image' && (
                 <div className="mt-3 p-3 bg-green-50 rounded-lg">
                   <p className="text-sm text-green-700">✓ Marca d'água: {watermark.name}</p>
+                </div>
+              )}
+              
+              {(config.watermarkType === 'text' || config.watermarkType === 'pattern') && config.textWatermark && (
+                <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                  <p className="text-sm text-green-700">✓ Texto: "{config.textWatermark}"</p>
                 </div>
               )}
             </div>
@@ -635,24 +937,78 @@ const WatermarkResizeApp = () => {
                             alt="Preview"
                             className="w-full h-full object-contain bg-white rounded"
                           />
-                          {watermark && !targetImage.processedUrl && (
-                            <div
-                              className="absolute"
-                              style={{
-                                ...getPositionStyle(config.position),
-                                opacity: config.opacity,
-                                width: `${config.watermarkSize}%`,
-                                filter: config.shadowEnabled ? 
-                                  `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, '0')})` : 
-                                  'none'
-                              }}
-                            >
-                              <img
-                                src={watermark.src}
-                                alt="Watermark"
-                                className="w-full h-auto"
-                              />
-                            </div>
+                          {/* Pré-visualização da marca d'água */}
+                          {!targetImage.processedUrl && (config.watermarkType === 'image' ? watermark : (config.textWatermark && (config.watermarkType === 'text' || config.watermarkType === 'pattern'))) && (
+                            <>
+                              {/* Marca d'água de imagem */}
+                              {config.watermarkType === 'image' && watermark && (
+                                <div
+                                  className="absolute"
+                                  style={{
+                                    ...getPositionStyle(config.position),
+                                    opacity: config.opacity,
+                                    width: `${config.watermarkSize}%`,
+                                    filter: config.shadowEnabled ? 
+                                      `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, '0')})` : 
+                                      'none'
+                                  }}
+                                >
+                                  <img
+                                    src={watermark.src}
+                                    alt="Watermark"
+                                    className="w-full h-auto"
+                                  />
+                                </div>
+                              )}
+                              
+                              {/* Marca d'água de texto simples */}
+                              {config.watermarkType === 'text' && config.textWatermark && (
+                                <div
+                                  className="absolute pointer-events-none select-none"
+                                  style={{
+                                    ...getPositionStyle(config.position),
+                                    opacity: config.opacity,
+                                    fontSize: `${Math.max(8, config.textSize * 0.15)}px`,
+                                    fontFamily: config.textFont,
+                                    color: config.textColor,
+                                    transform: `${getPositionStyle(config.position).transform || ''} rotate(${config.textRotation}deg)`,
+                                    textShadow: config.shadowEnabled ? 
+                                      `${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}` : 
+                                      'none',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  {config.textWatermark}
+                                </div>
+                              )}
+                              
+                              {/* Marca d'água em padrão */}
+                              {config.watermarkType === 'pattern' && config.textWatermark && (
+                                <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+                                  {Array.from({ length: 20 }, (_, i) => (
+                                    <div
+                                      key={i}
+                                      className="absolute"
+                                      style={{
+                                        left: `${(i % 5) * 25}%`,
+                                        top: `${Math.floor(i / 5) * 25}%`,
+                                        opacity: config.opacity * 0.7,
+                                        fontSize: `${Math.max(6, config.textSize * 0.1)}px`,
+                                        fontFamily: config.textFont,
+                                        color: config.textColor,
+                                        transform: `rotate(${config.textRotation}deg)`,
+                                        textShadow: config.shadowEnabled ? 
+                                          `${config.shadowOffsetX * 0.5}px ${config.shadowOffsetY * 0.5}px ${config.shadowBlur * 0.5}px ${config.shadowColor}` : 
+                                          'none',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {config.textWatermark}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                         <p className="text-xs text-gray-600 text-center mt-2">

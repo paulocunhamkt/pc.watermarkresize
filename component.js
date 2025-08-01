@@ -19,7 +19,17 @@ var WatermarkResizeApp = () => {
     shadowColor: "#000000",
     shadowOpacity: 0.5,
     shadowOffsetX: 2,
-    shadowOffsetY: 2
+    shadowOffsetY: 2,
+    // Novas configurações para texto e padrão
+    watermarkType: "image",
+    // 'image' ou 'text' ou 'pattern'
+    textWatermark: "SAMPLE",
+    textFont: "Arial",
+    textSize: 48,
+    textColor: "#000000",
+    textRotation: -45,
+    patternSpacing: 200,
+    patternEnabled: false
   });
   const [previewMode, setPreviewMode] = useState("landscape");
   const imageInputRef = useRef(null);
@@ -97,9 +107,84 @@ var WatermarkResizeApp = () => {
         }
         canvas.width = newWidth;
         canvas.height = newHeight;
-        let drawWidth, drawHeight, x, y;
         ctx.drawImage(img, 0, 0, newWidth, newHeight);
-        if (watermarkData) {
+        if (config2.watermarkType === "text" && config2.textWatermark) {
+          ctx.save();
+          ctx.font = `${config2.textSize}px ${config2.textFont}`;
+          ctx.fillStyle = config2.textColor;
+          ctx.globalAlpha = config2.opacity;
+          if (config2.shadowEnabled) {
+            ctx.shadowColor = config2.shadowColor;
+            ctx.shadowBlur = config2.shadowBlur;
+            ctx.shadowOffsetX = config2.shadowOffsetX;
+            ctx.shadowOffsetY = config2.shadowOffsetY;
+          }
+          const textMetrics = ctx.measureText(config2.textWatermark);
+          const textWidth = textMetrics.width;
+          const textHeight = config2.textSize;
+          let textX, textY;
+          const margin = 20;
+          switch (config2.position) {
+            case "top-left":
+              textX = margin;
+              textY = margin + textHeight;
+              break;
+            case "top-right":
+              textX = newWidth - textWidth - margin;
+              textY = margin + textHeight;
+              break;
+            case "bottom-left":
+              textX = margin;
+              textY = newHeight - margin;
+              break;
+            case "bottom-right":
+              textX = newWidth - textWidth - margin;
+              textY = newHeight - margin;
+              break;
+            case "bottom-center":
+              textX = (newWidth - textWidth) / 2;
+              textY = newHeight - margin;
+              break;
+            case "center":
+              textX = (newWidth - textWidth) / 2;
+              textY = (newHeight + textHeight) / 2;
+              break;
+            default:
+              textX = newWidth - textWidth - margin;
+              textY = newHeight - margin;
+          }
+          if (config2.textRotation !== 0) {
+            ctx.translate(textX + textWidth / 2, textY - textHeight / 2);
+            ctx.rotate(config2.textRotation * Math.PI / 180);
+            ctx.fillText(config2.textWatermark, -textWidth / 2, textHeight / 4);
+          } else {
+            ctx.fillText(config2.textWatermark, textX, textY);
+          }
+          ctx.restore();
+        } else if (config2.watermarkType === "pattern" && config2.textWatermark) {
+          ctx.save();
+          ctx.font = `${config2.textSize}px ${config2.textFont}`;
+          ctx.fillStyle = config2.textColor;
+          ctx.globalAlpha = config2.opacity;
+          if (config2.shadowEnabled) {
+            ctx.shadowColor = config2.shadowColor;
+            ctx.shadowBlur = config2.shadowBlur;
+            ctx.shadowOffsetX = config2.shadowOffsetX;
+            ctx.shadowOffsetY = config2.shadowOffsetY;
+          }
+          const spacing = config2.patternSpacing;
+          const diagonal = Math.sqrt(newWidth * newWidth + newHeight * newHeight);
+          for (let i = -diagonal; i < diagonal; i += spacing) {
+            for (let j = -diagonal; j < diagonal; j += spacing) {
+              ctx.save();
+              ctx.translate(i, j);
+              ctx.rotate(config2.textRotation * Math.PI / 180);
+              ctx.fillText(config2.textWatermark, 0, 0);
+              ctx.restore();
+            }
+          }
+          ctx.restore();
+        } else if (watermarkData && config2.watermarkType === "image") {
           const watermarkImg = new window.Image();
           watermarkImg.crossOrigin = "anonymous";
           watermarkImg.onerror = () => reject(new Error("Erro ao carregar marca d'\xE1gua"));
@@ -154,7 +239,7 @@ var WatermarkResizeApp = () => {
               ctx.shadowOffsetX = config2.shadowOffsetX;
               ctx.shadowOffsetY = config2.shadowOffsetY;
               ctx.globalAlpha = config2.shadowOpacity;
-              ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+              ctx.drawImage(watermarkImg, watermarkX, watermarkY, logoWidth, logoHeight);
               ctx.shadowColor = "transparent";
               ctx.shadowBlur = 0;
               ctx.shadowOffsetX = 0;
@@ -172,7 +257,8 @@ var WatermarkResizeApp = () => {
             }, "image/jpeg", 0.9);
           };
           watermarkImg.src = watermarkData;
-        } else {
+        }
+        if (config2.watermarkType === "text" || config2.watermarkType === "pattern" || !watermarkData) {
           canvas.toBlob((blob) => {
             if (blob) {
               resolve(blob);
@@ -188,6 +274,14 @@ var WatermarkResizeApp = () => {
   const processImages = async () => {
     if (images.length === 0) {
       alert("Nenhuma imagem carregada para processar.");
+      return;
+    }
+    if (config.watermarkType === "image" && !watermark) {
+      alert("Selecione uma imagem para marca d'\xE1gua ou use o modo de texto.");
+      return;
+    }
+    if ((config.watermarkType === "text" || config.watermarkType === "pattern") && !config.textWatermark.trim()) {
+      alert("Digite um texto para a marca d'\xE1gua.");
       return;
     }
     setIsProcessing(true);
@@ -261,7 +355,28 @@ var WatermarkResizeApp = () => {
     },
     /* @__PURE__ */ React.createElement(FileImage, { className: "w-5 h-5" }),
     "Carregar Imagens"
+  ), /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-3 gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setConfig((prev) => ({ ...prev, watermarkType: "image" })),
+      className: `px-3 py-2 text-xs rounded transition-colors ${config.watermarkType === "image" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
+    },
+    "Imagem"
   ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setConfig((prev) => ({ ...prev, watermarkType: "text" })),
+      className: `px-3 py-2 text-xs rounded transition-colors ${config.watermarkType === "text" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
+    },
+    "Texto"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setConfig((prev) => ({ ...prev, watermarkType: "pattern" })),
+      className: `px-3 py-2 text-xs rounded transition-colors ${config.watermarkType === "pattern" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`
+    },
+    "Padr\xE3o"
+  )), config.watermarkType === "image" && /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => watermarkInputRef.current?.click(),
@@ -269,7 +384,7 @@ var WatermarkResizeApp = () => {
     },
     /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-5 h-5" }),
     "Carregar Marca D'\xE1gua"
-  ), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement(
     "input",
     {
       ref: imageInputRef,
@@ -288,7 +403,94 @@ var WatermarkResizeApp = () => {
       onChange: handleWatermarkUpload,
       className: "hidden"
     }
-  )), watermark && /* @__PURE__ */ React.createElement("div", { className: "mt-3 p-3 bg-green-50 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, "\u2713 Marca d'\xE1gua: ", watermark.name))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Settings, { className: "w-5 h-5" }), "Configurar"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Largura (px)"), /* @__PURE__ */ React.createElement(
+  )), config.watermarkType === "text" && /* @__PURE__ */ React.createElement("div", { className: "mt-3 space-y-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Texto da Marca"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: config.textWatermark,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textWatermark: e.target.value })),
+      placeholder: "Digite o texto...",
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Fonte"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: config.textFont,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textFont: e.target.value })),
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "Arial" }, "Arial"),
+    /* @__PURE__ */ React.createElement("option", { value: "Arial Black" }, "Arial Black"),
+    /* @__PURE__ */ React.createElement("option", { value: "Helvetica" }, "Helvetica"),
+    /* @__PURE__ */ React.createElement("option", { value: "Times New Roman" }, "Times"),
+    /* @__PURE__ */ React.createElement("option", { value: "Verdana" }, "Verdana"),
+    /* @__PURE__ */ React.createElement("option", { value: "Impact" }, "Impact")
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Tamanho: ", config.textSize, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "12",
+      max: "120",
+      value: config.textSize,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textSize: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Cor do Texto"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "color",
+      value: config.textColor,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textColor: e.target.value })),
+      className: "w-8 h-8 rounded border border-gray-300 cursor-pointer"
+    }
+  ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-gray-500" }, config.textColor))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Rota\xE7\xE3o: ", config.textRotation, "\xB0"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "-90",
+      max: "90",
+      value: config.textRotation,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textRotation: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )))), config.watermarkType === "pattern" && /* @__PURE__ */ React.createElement("div", { className: "mt-3 space-y-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Texto do Padr\xE3o"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: config.textWatermark,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textWatermark: e.target.value })),
+      placeholder: "SAMPLE",
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Espa\xE7amento: ", config.patternSpacing, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "100",
+      max: "400",
+      value: config.patternSpacing,
+      onChange: (e) => setConfig((prev) => ({ ...prev, patternSpacing: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Tamanho: ", config.textSize, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "24",
+      max: "80",
+      value: config.textSize,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textSize: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Cor do Texto"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "color",
+      value: config.textColor,
+      onChange: (e) => setConfig((prev) => ({ ...prev, textColor: e.target.value })),
+      className: "w-8 h-8 rounded border border-gray-300 cursor-pointer"
+    }
+  )))), watermark && config.watermarkType === "image" && /* @__PURE__ */ React.createElement("div", { className: "mt-3 p-3 bg-green-50 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, "\u2713 Marca d'\xE1gua: ", watermark.name)), (config.watermarkType === "text" || config.watermarkType === "pattern") && config.textWatermark && /* @__PURE__ */ React.createElement("div", { className: "mt-3 p-3 bg-green-50 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, '\u2713 Texto: "', config.textWatermark, '"'))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Settings, { className: "w-5 h-5" }), "Configurar"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Largura (px)"), /* @__PURE__ */ React.createElement(
     "input",
     {
       type: "number",
@@ -445,7 +647,7 @@ var WatermarkResizeApp = () => {
           className: "w-full h-full object-contain bg-white rounded"
         }
       ),
-      watermark && !targetImage.processedUrl && /* @__PURE__ */ React.createElement(
+      !targetImage.processedUrl && (config.watermarkType === "image" ? watermark : config.textWatermark && (config.watermarkType === "text" || config.watermarkType === "pattern")) && /* @__PURE__ */ React.createElement(React.Fragment, null, config.watermarkType === "image" && watermark && /* @__PURE__ */ React.createElement(
         "div",
         {
           className: "absolute",
@@ -464,7 +666,41 @@ var WatermarkResizeApp = () => {
             className: "w-full h-auto"
           }
         )
-      )
+      ), config.watermarkType === "text" && config.textWatermark && /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "absolute pointer-events-none select-none",
+          style: {
+            ...getPositionStyle(config.position),
+            opacity: config.opacity,
+            fontSize: `${Math.max(8, config.textSize * 0.15)}px`,
+            fontFamily: config.textFont,
+            color: config.textColor,
+            transform: `${getPositionStyle(config.position).transform || ""} rotate(${config.textRotation}deg)`,
+            textShadow: config.shadowEnabled ? `${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}` : "none",
+            whiteSpace: "nowrap"
+          }
+        },
+        config.textWatermark
+      ), config.watermarkType === "pattern" && config.textWatermark && /* @__PURE__ */ React.createElement("div", { className: "absolute inset-0 pointer-events-none select-none overflow-hidden" }, Array.from({ length: 20 }, (_, i) => /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          key: i,
+          className: "absolute",
+          style: {
+            left: `${i % 5 * 25}%`,
+            top: `${Math.floor(i / 5) * 25}%`,
+            opacity: config.opacity * 0.7,
+            fontSize: `${Math.max(6, config.textSize * 0.1)}px`,
+            fontFamily: config.textFont,
+            color: config.textColor,
+            transform: `rotate(${config.textRotation}deg)`,
+            textShadow: config.shadowEnabled ? `${config.shadowOffsetX * 0.5}px ${config.shadowOffsetY * 0.5}px ${config.shadowBlur * 0.5}px ${config.shadowColor}` : "none",
+            whiteSpace: "nowrap"
+          }
+        },
+        config.textWatermark
+      ))))
     ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, "Base: ", config.width, " x ", config.height, "px \u2022 ", previewMode === "landscape" ? "Paisagem" : "Retrato", imageDims && /* @__PURE__ */ React.createElement("span", { className: "text-gray-500 ml-2" }, "(Original: ", imageDims.width, "x", imageDims.height, ")"), targetImage.processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\u2713 Processada")));
   })()) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\xE9-visualiza\xE7\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
