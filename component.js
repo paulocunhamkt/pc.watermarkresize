@@ -1,6 +1,6 @@
 // <stdin>
 import React, { useState, useRef } from "https://esm.sh/react@18.2.0";
-import { Upload, Image, Settings, Eye, Download, FileImage } from "https://esm.sh/lucide-react?deps=react@18.2.0,react-dom@18.2.0";
+import { Upload, Image as ImageIcon, Settings, Eye, Download, FileImage } from "https://esm.sh/lucide-react?deps=react@18.2.0,react-dom@18.2.0";
 import JSZip from "https://esm.sh/jszip?deps=react@18.2.0,react-dom@18.2.0";
 var WatermarkResizeApp = () => {
   const [images, setImages] = useState([]);
@@ -63,10 +63,12 @@ var WatermarkResizeApp = () => {
     return positions[position] || positions["bottom-right"];
   };
   const processImage = (imageData, watermarkData, config2) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      const img = new Image();
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onerror = () => reject(new Error("Erro ao carregar imagem"));
       img.onload = () => {
         canvas.width = config2.width;
         canvas.height = config2.height;
@@ -87,7 +89,9 @@ var WatermarkResizeApp = () => {
         ctx.fillRect(0, 0, config2.width, config2.height);
         ctx.drawImage(img, x, y, drawWidth, drawHeight);
         if (watermarkData) {
-          const watermarkImg = new Image();
+          const watermarkImg = new window.Image();
+          watermarkImg.crossOrigin = "anonymous";
+          watermarkImg.onerror = () => reject(new Error("Erro ao carregar marca d'\xE1gua"));
           watermarkImg.onload = () => {
             const watermarkWidth = config2.width * config2.watermarkSize / 100;
             const watermarkHeight = watermarkImg.height * watermarkWidth / watermarkImg.width;
@@ -137,22 +141,41 @@ var WatermarkResizeApp = () => {
             ctx.globalAlpha = config2.opacity;
             ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
             ctx.globalAlpha = 1;
-            canvas.toBlob(resolve, "image/jpeg", 0.9);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error("Erro ao converter imagem"));
+              }
+            }, "image/jpeg", 0.9);
           };
           watermarkImg.src = watermarkData;
         } else {
-          canvas.toBlob(resolve, "image/jpeg", 0.9);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Erro ao converter imagem"));
+            }
+          }, "image/jpeg", 0.9);
         }
       };
       img.src = imageData;
     });
   };
   const processImages = async () => {
+    if (images.length === 0) {
+      alert("Nenhuma imagem carregada para processar.");
+      return;
+    }
     setIsProcessing(true);
     try {
       const processedImages = [];
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
+        if (!image.src) {
+          throw new Error(`Imagem ${image.name} n\xE3o est\xE1 dispon\xEDvel`);
+        }
         const processedBlob = await processImage(
           image.src,
           watermark?.src,
@@ -170,7 +193,7 @@ var WatermarkResizeApp = () => {
       }
     } catch (error) {
       console.error("Erro ao processar imagens:", error);
-      alert("Erro ao processar imagens. Tente novamente.");
+      alert(`Erro ao processar imagens: ${error.message}. Verifique se as imagens s\xE3o v\xE1lidas e tente novamente.`);
     } finally {
       setIsProcessing(false);
     }
@@ -221,7 +244,7 @@ var WatermarkResizeApp = () => {
       onClick: () => watermarkInputRef.current?.click(),
       className: "w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
     },
-    /* @__PURE__ */ React.createElement(Image, { className: "w-5 h-5" }),
+    /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-5 h-5" }),
     "Carregar Marca D'\xE1gua"
   ), /* @__PURE__ */ React.createElement(
     "input",
@@ -410,7 +433,7 @@ var WatermarkResizeApp = () => {
         }
       )
     )
-  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, config.width, " x ", config.height, "px", images[0].processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\u2713 Processada"))) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(Image, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\xE9-visualiza\xE7\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, config.width, " x ", config.height, "px", images[0].processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\u2713 Processada"))) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\xE9-visualiza\xE7\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: processImages,

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Image, Settings, Eye, Download, FileImage } from 'lucide-react';
+import { Upload, Image as ImageIcon, Settings, Eye, Download, FileImage } from 'lucide-react';
 import JSZip from 'jszip';
 
 const WatermarkResizeApp = () => {
@@ -69,11 +69,13 @@ const WatermarkResizeApp = () => {
 
   // Função para redimensionar imagem e aplicar marca d'água
   const processImage = (imageData, watermarkData, config) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      const img = new Image();
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onerror = () => reject(new Error('Erro ao carregar imagem'));
       img.onload = () => {
         // Configurar dimensões do canvas
         canvas.width = config.width;
@@ -107,7 +109,9 @@ const WatermarkResizeApp = () => {
         
         // Aplicar marca d'água se existir
         if (watermarkData) {
-          const watermarkImg = new Image();
+          const watermarkImg = new window.Image();
+          watermarkImg.crossOrigin = 'anonymous';
+          watermarkImg.onerror = () => reject(new Error('Erro ao carregar marca d\'água'));
           watermarkImg.onload = () => {
             // Calcular tamanho da marca d'água
             const watermarkWidth = (config.width * config.watermarkSize) / 100;
@@ -175,12 +179,24 @@ const WatermarkResizeApp = () => {
             ctx.globalAlpha = 1.0;
             
             // Converter para blob
-            canvas.toBlob(resolve, 'image/jpeg', 0.9);
+            canvas.toBlob((blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Erro ao converter imagem'));
+              }
+            }, 'image/jpeg', 0.9);
           };
           watermarkImg.src = watermarkData;
         } else {
           // Sem marca d'água, apenas converter para blob
-          canvas.toBlob(resolve, 'image/jpeg', 0.9);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Erro ao converter imagem'));
+            }
+          }, 'image/jpeg', 0.9);
         }
       };
       img.src = imageData;
@@ -188,6 +204,11 @@ const WatermarkResizeApp = () => {
   };
 
   const processImages = async () => {
+    if (images.length === 0) {
+      alert('Nenhuma imagem carregada para processar.');
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
@@ -195,6 +216,12 @@ const WatermarkResizeApp = () => {
       
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
+        
+        // Validar se a imagem ainda está disponível
+        if (!image.src) {
+          throw new Error(`Imagem ${image.name} não está disponível`);
+        }
+        
         const processedBlob = await processImage(
           image.src,
           watermark?.src,
@@ -216,7 +243,7 @@ const WatermarkResizeApp = () => {
       
     } catch (error) {
       console.error('Erro ao processar imagens:', error);
-      alert('Erro ao processar imagens. Tente novamente.');
+      alert(`Erro ao processar imagens: ${error.message}. Verifique se as imagens são válidas e tente novamente.`);
     } finally {
       setIsProcessing(false);
     }
@@ -298,7 +325,7 @@ const WatermarkResizeApp = () => {
                   onClick={() => watermarkInputRef.current?.click()}
                   className="w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
                 >
-                  <Image className="w-5 h-5" />
+                  <ImageIcon className="w-5 h-5" />
                   Carregar Marca D'água
                 </button>
 
@@ -589,7 +616,7 @@ const WatermarkResizeApp = () => {
                 </div>
               ) : (
                 <div className="text-center text-gray-500">
-                  <Image className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
                   <p>Carregue uma imagem para ver a pré-visualização</p>
                 </div>
               )}
