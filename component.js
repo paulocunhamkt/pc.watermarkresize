@@ -6,6 +6,7 @@ var WatermarkResizeApp = () => {
   const [images, setImages] = useState([]);
   const [watermark, setWatermark] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [imagesDimensions, setImagesDimensions] = useState({});
   const [config, setConfig] = useState({
     width: 1920,
     height: 1080,
@@ -28,12 +29,26 @@ var WatermarkResizeApp = () => {
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setImages((prev) => [...prev, {
-          id: Date.now() + Math.random(),
+        const imageId = Date.now() + Math.random();
+        const imageData = {
+          id: imageId,
           name: file.name,
           src: e.target.result,
           processed: false
-        }]);
+        };
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          setImagesDimensions((prev) => ({
+            ...prev,
+            [imageId]: {
+              width: tempImg.width,
+              height: tempImg.height,
+              isVertical: tempImg.height > tempImg.width
+            }
+          }));
+        };
+        tempImg.src = e.target.result;
+        setImages((prev) => [...prev, imageData]);
       };
       reader.readAsDataURL(file);
     });
@@ -62,7 +77,7 @@ var WatermarkResizeApp = () => {
     };
     return positions[position] || positions["bottom-right"];
   };
-  const processImage = (imageData, watermarkData, config2) => {
+  const processImage = (imageData, watermarkData, config2, imageDimensions) => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -70,31 +85,38 @@ var WatermarkResizeApp = () => {
       img.crossOrigin = "anonymous";
       img.onerror = () => reject(new Error("Erro ao carregar imagem"));
       img.onload = () => {
-        canvas.width = config2.width;
-        canvas.height = config2.height;
-        let drawWidth = config2.width;
-        let drawHeight = config2.height;
+        let newWidth = config2.width;
+        let newHeight = config2.height;
+        const imageAspectRatio = img.width / img.height;
         if (config2.maintainAspect) {
-          const imgAspect = img.width / img.height;
-          const canvasAspect = config2.width / config2.height;
-          if (imgAspect > canvasAspect) {
-            drawHeight = config2.width / imgAspect;
+          if (imageAspectRatio >= 1) {
+            newHeight = Math.round(newWidth / imageAspectRatio);
           } else {
-            drawWidth = config2.height * imgAspect;
+            newWidth = Math.round(newHeight * imageAspectRatio);
           }
         }
-        const x = (config2.width - drawWidth) / 2;
-        const y = (config2.height - drawHeight) / 2;
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, config2.width, config2.height);
-        ctx.drawImage(img, x, y, drawWidth, drawHeight);
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        let drawWidth, drawHeight, x, y;
+        ctx.drawImage(img, 0, 0, newWidth, newHeight);
         if (watermarkData) {
           const watermarkImg = new window.Image();
           watermarkImg.crossOrigin = "anonymous";
           watermarkImg.onerror = () => reject(new Error("Erro ao carregar marca d'\xE1gua"));
           watermarkImg.onload = () => {
-            const watermarkWidth = config2.width * config2.watermarkSize / 100;
-            const watermarkHeight = watermarkImg.height * watermarkWidth / watermarkImg.width;
+            const logoScaleFactor = config2.watermarkSize / 100;
+            const logoReferenceWidth = config2.width;
+            const logoAspectRatio = watermarkImg.width / watermarkImg.height;
+            let logoWidth = logoReferenceWidth * logoScaleFactor;
+            let logoHeight = logoWidth / logoAspectRatio;
+            if (logoHeight > newHeight * 0.9) {
+              logoHeight = newHeight * 0.9;
+              logoWidth = logoHeight * logoAspectRatio;
+            }
+            if (logoWidth > newWidth * 0.9) {
+              logoWidth = newWidth * 0.9;
+              logoHeight = logoWidth / logoAspectRatio;
+            }
             let watermarkX, watermarkY;
             const margin = 20;
             switch (config2.position) {
@@ -103,28 +125,28 @@ var WatermarkResizeApp = () => {
                 watermarkY = margin;
                 break;
               case "top-right":
-                watermarkX = config2.width - watermarkWidth - margin;
+                watermarkX = newWidth - logoWidth - margin;
                 watermarkY = margin;
                 break;
               case "bottom-left":
                 watermarkX = margin;
-                watermarkY = config2.height - watermarkHeight - margin;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case "bottom-right":
-                watermarkX = config2.width - watermarkWidth - margin;
-                watermarkY = config2.height - watermarkHeight - margin;
+                watermarkX = newWidth - logoWidth - margin;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case "bottom-center":
-                watermarkX = (config2.width - watermarkWidth) / 2;
-                watermarkY = config2.height - watermarkHeight - margin;
+                watermarkX = (newWidth - logoWidth) / 2;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case "center":
-                watermarkX = (config2.width - watermarkWidth) / 2;
-                watermarkY = (config2.height - watermarkHeight) / 2;
+                watermarkX = (newWidth - logoWidth) / 2;
+                watermarkY = (newHeight - logoHeight) / 2;
                 break;
               default:
-                watermarkX = config2.width - watermarkWidth - margin;
-                watermarkY = config2.height - watermarkHeight - margin;
+                watermarkX = newWidth - logoWidth - margin;
+                watermarkY = newHeight - logoHeight - margin;
             }
             if (config2.shadowEnabled) {
               ctx.shadowColor = config2.shadowColor;
@@ -139,7 +161,7 @@ var WatermarkResizeApp = () => {
               ctx.shadowOffsetY = 0;
             }
             ctx.globalAlpha = config2.opacity;
-            ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+            ctx.drawImage(watermarkImg, watermarkX, watermarkY, logoWidth, logoHeight);
             ctx.globalAlpha = 1;
             canvas.toBlob((blob) => {
               if (blob) {
@@ -179,7 +201,8 @@ var WatermarkResizeApp = () => {
         const processedBlob = await processImage(
           image.src,
           watermark?.src,
-          config
+          config,
+          imagesDimensions[image.id]
         );
         processedImages.push({
           ...image,
@@ -290,7 +313,7 @@ var WatermarkResizeApp = () => {
       onChange: (e) => setConfig((prev) => ({ ...prev, maintainAspect: e.target.checked })),
       className: "w-4 h-4 text-purple-600"
     }
-  ), /* @__PURE__ */ React.createElement("label", { htmlFor: "maintainAspect", className: "text-sm text-gray-700" }, "Manter propor\xE7\xE3o")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Posicionamento da Marca D'\xE1gua"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2 text-xs" }, [
+  ), /* @__PURE__ */ React.createElement("label", { htmlFor: "maintainAspect", className: "text-sm text-gray-700" }, "Manter propor\xE7\xE3o (sem sobras)")), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-500 ml-6" }, config.maintainAspect ? "Paisagem: altura ajustada proporcionalmente. Retrato: largura ajustada proporcionalmente." : "A imagem ser\xE1 esticada para caber exatamente nas dimens\xF5es definidas"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Posicionamento da Marca D'\xE1gua"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2 text-xs" }, [
     { value: "top-left", label: "Superior Esquerdo" },
     { value: "top-right", label: "Superior Direito" },
     { value: "bottom-left", label: "Inferior Esquerdo" },
@@ -400,40 +423,50 @@ var WatermarkResizeApp = () => {
       className: `px-3 py-1 text-xs rounded ${previewMode === "portrait" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}`
     },
     "Retrato"
-  ))), /* @__PURE__ */ React.createElement("div", { className: "border-2 border-dashed border-purple-300 rounded-lg p-4 min-h-64 flex items-center justify-center" }, images.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
-    "div",
-    {
-      className: `relative bg-gray-100 border-2 border-gray-200 rounded ${previewMode === "landscape" ? "w-64 h-36" : "w-36 h-64"}`
-    },
-    /* @__PURE__ */ React.createElement(
-      "img",
-      {
-        src: images[0].processedUrl || images[0].src,
-        alt: "Preview",
-        className: "w-full h-full object-cover rounded"
-      }
-    ),
-    watermark && !images[0].processedUrl && /* @__PURE__ */ React.createElement(
+  ))), /* @__PURE__ */ React.createElement("div", { className: "border-2 border-dashed border-purple-300 rounded-lg p-4 min-h-64 flex items-center justify-center" }, images.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "relative" }, (() => {
+    const targetImage = previewMode === "landscape" ? images.find((img) => {
+      const dims = imagesDimensions[img.id];
+      return dims && !dims.isVertical;
+    }) || images[0] : images.find((img) => {
+      const dims = imagesDimensions[img.id];
+      return dims && dims.isVertical;
+    }) || images[0];
+    const imageDims = imagesDimensions[targetImage.id];
+    return /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(
       "div",
       {
-        className: "absolute",
-        style: {
-          ...getPositionStyle(config.position),
-          opacity: config.opacity,
-          width: `${config.watermarkSize}%`,
-          filter: config.shadowEnabled ? `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, "0")})` : "none"
-        }
+        className: `relative bg-gray-100 border-2 border-gray-200 rounded ${previewMode === "landscape" ? "w-64 h-36" : "w-36 h-64"}`
       },
       /* @__PURE__ */ React.createElement(
         "img",
         {
-          src: watermark.src,
-          alt: "Watermark",
-          className: "w-full h-auto"
+          src: targetImage.processedUrl || targetImage.src,
+          alt: "Preview",
+          className: "w-full h-full object-contain bg-white rounded"
         }
+      ),
+      watermark && !targetImage.processedUrl && /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "absolute",
+          style: {
+            ...getPositionStyle(config.position),
+            opacity: config.opacity,
+            width: `${config.watermarkSize}%`,
+            filter: config.shadowEnabled ? `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, "0")})` : "none"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "img",
+          {
+            src: watermark.src,
+            alt: "Watermark",
+            className: "w-full h-auto"
+          }
+        )
       )
-    )
-  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, config.width, " x ", config.height, "px", images[0].processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\u2713 Processada"))) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\xE9-visualiza\xE7\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, "Base: ", config.width, " x ", config.height, "px \u2022 ", previewMode === "landscape" ? "Paisagem" : "Retrato", imageDims && /* @__PURE__ */ React.createElement("span", { className: "text-gray-500 ml-2" }, "(Original: ", imageDims.width, "x", imageDims.height, ")"), targetImage.processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\u2713 Processada")));
+  })()) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(ImageIcon, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\xE9-visualiza\xE7\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: processImages,
@@ -457,7 +490,7 @@ var WatermarkResizeApp = () => {
       className: `flex items-center gap-3 p-3 rounded-lg border ${image.processed ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`
     },
     /* @__PURE__ */ React.createElement("div", { className: "w-12 h-12 bg-purple-100 rounded flex items-center justify-center" }, /* @__PURE__ */ React.createElement(FileImage, { className: "w-6 h-6 text-purple-600" })),
-    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-gray-800 truncate" }, image.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-500" }, image.processed ? "Processada \u2713" : isProcessing ? "Processando..." : "Aguardando")),
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-gray-800 truncate" }, image.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-500" }, image.processed ? "Processada \u2713" : isProcessing ? "Processando..." : "Aguardando", imagesDimensions[image.id] && /* @__PURE__ */ React.createElement("span", { className: "ml-2" }, "\u2022 ", imagesDimensions[image.id].width, "x", imagesDimensions[image.id].height, imagesDimensions[image.id].isVertical ? " (Retrato)" : " (Paisagem)"))),
     image.processed && /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-green-500 rounded-full flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-white rounded-full" }))
   ))))), /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-500" }, "\xA9 2025 PauloCunhaMKT Solu\xE7\xF5es TI \u2022 v1.1.0"))));
 };

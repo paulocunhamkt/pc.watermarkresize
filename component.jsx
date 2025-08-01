@@ -6,6 +6,7 @@ const WatermarkResizeApp = () => {
   const [images, setImages] = useState([]);
   const [watermark, setWatermark] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [imagesDimensions, setImagesDimensions] = useState({});
   const [config, setConfig] = useState({
     width: 1920,
     height: 1080,
@@ -30,12 +31,29 @@ const WatermarkResizeApp = () => {
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        setImages(prev => [...prev, {
-          id: Date.now() + Math.random(),
+        const imageId = Date.now() + Math.random();
+        const imageData = {
+          id: imageId,
           name: file.name,
           src: e.target.result,
           processed: false
-        }]);
+        };
+        
+        // Criar uma imagem temporária para obter as dimensões
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          setImagesDimensions(prev => ({
+            ...prev,
+            [imageId]: {
+              width: tempImg.width,
+              height: tempImg.height,
+              isVertical: tempImg.height > tempImg.width
+            }
+          }));
+        };
+        tempImg.src = e.target.result;
+        
+        setImages(prev => [...prev, imageData]);
       };
       reader.readAsDataURL(file);
     });
@@ -68,7 +86,7 @@ const WatermarkResizeApp = () => {
   };
 
   // Função para redimensionar imagem e aplicar marca d'água
-  const processImage = (imageData, watermarkData, config) => {
+  const processImage = (imageData, watermarkData, config, imageDimensions) => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -77,35 +95,27 @@ const WatermarkResizeApp = () => {
       img.crossOrigin = 'anonymous';
       img.onerror = () => reject(new Error('Erro ao carregar imagem'));
       img.onload = () => {
-        // Configurar dimensões do canvas
-        canvas.width = config.width;
-        canvas.height = config.height;
-        
-        // Calcular dimensões da imagem mantendo proporção se necessário
-        let drawWidth = config.width;
-        let drawHeight = config.height;
+        // Implementar a lógica do código original
+        let newWidth = config.width;
+        let newHeight = config.height;
+        const imageAspectRatio = img.width / img.height;
         
         if (config.maintainAspect) {
-          const imgAspect = img.width / img.height;
-          const canvasAspect = config.width / config.height;
-          
-          if (imgAspect > canvasAspect) {
-            drawHeight = config.width / imgAspect;
-          } else {
-            drawWidth = config.height * imgAspect;
+          if (imageAspectRatio >= 1) { // Landscape or square
+            newHeight = Math.round(newWidth / imageAspectRatio);
+          } else { // Portrait
+            newWidth = Math.round(newHeight * imageAspectRatio);
           }
         }
         
-        // Centralizar a imagem
-        const x = (config.width - drawWidth) / 2;
-        const y = (config.height - drawHeight) / 2;
+        canvas.width = newWidth;
+        canvas.height = newHeight;
         
-        // Desenhar fundo branco
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, config.width, config.height);
+        // Calcular dimensões da imagem mantendo proporção
+        let drawWidth, drawHeight, x, y;
         
-        // Desenhar a imagem redimensionada
-        ctx.drawImage(img, x, y, drawWidth, drawHeight);
+        // Desenhar a imagem redimensionada (seguindo lógica original)
+        ctx.drawImage(img, 0, 0, newWidth, newHeight);
         
         // Aplicar marca d'água se existir
         if (watermarkData) {
@@ -113,9 +123,23 @@ const WatermarkResizeApp = () => {
           watermarkImg.crossOrigin = 'anonymous';
           watermarkImg.onerror = () => reject(new Error('Erro ao carregar marca d\'água'));
           watermarkImg.onload = () => {
-            // Calcular tamanho da marca d'água
-            const watermarkWidth = (config.width * config.watermarkSize) / 100;
-            const watermarkHeight = (watermarkImg.height * watermarkWidth) / watermarkImg.width;
+            // Calcular tamanho da marca d'água (seguindo lógica original)
+            const logoScaleFactor = config.watermarkSize / 100;
+            const logoReferenceWidth = config.width;
+            
+            const logoAspectRatio = watermarkImg.width / watermarkImg.height;
+            let logoWidth = logoReferenceWidth * logoScaleFactor;
+            let logoHeight = logoWidth / logoAspectRatio;
+            
+            // Garantir que a logo não ultrapasse 90% das dimensões
+            if (logoHeight > newHeight * 0.9) {
+              logoHeight = newHeight * 0.9;
+              logoWidth = logoHeight * logoAspectRatio;
+            }
+            if (logoWidth > newWidth * 0.9) {
+              logoWidth = newWidth * 0.9;
+              logoHeight = logoWidth / logoAspectRatio;
+            }
             
             // Calcular posição da marca d'água
             let watermarkX, watermarkY;
@@ -127,28 +151,28 @@ const WatermarkResizeApp = () => {
                 watermarkY = margin;
                 break;
               case 'top-right':
-                watermarkX = config.width - watermarkWidth - margin;
+                watermarkX = newWidth - logoWidth - margin;
                 watermarkY = margin;
                 break;
               case 'bottom-left':
                 watermarkX = margin;
-                watermarkY = config.height - watermarkHeight - margin;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case 'bottom-right':
-                watermarkX = config.width - watermarkWidth - margin;
-                watermarkY = config.height - watermarkHeight - margin;
+                watermarkX = newWidth - logoWidth - margin;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case 'bottom-center':
-                watermarkX = (config.width - watermarkWidth) / 2;
-                watermarkY = config.height - watermarkHeight - margin;
+                watermarkX = (newWidth - logoWidth) / 2;
+                watermarkY = newHeight - logoHeight - margin;
                 break;
               case 'center':
-                watermarkX = (config.width - watermarkWidth) / 2;
-                watermarkY = (config.height - watermarkHeight) / 2;
+                watermarkX = (newWidth - logoWidth) / 2;
+                watermarkY = (newHeight - logoHeight) / 2;
                 break;
               default:
-                watermarkX = config.width - watermarkWidth - margin;
-                watermarkY = config.height - watermarkHeight - margin;
+                watermarkX = newWidth - logoWidth - margin;
+                watermarkY = newHeight - logoHeight - margin;
             }
             
             // Aplicar efeito de sombra se habilitado
@@ -173,7 +197,7 @@ const WatermarkResizeApp = () => {
             ctx.globalAlpha = config.opacity;
             
             // Desenhar marca d'água
-            ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+            ctx.drawImage(watermarkImg, watermarkX, watermarkY, logoWidth, logoHeight);
             
             // Restaurar opacidade
             ctx.globalAlpha = 1.0;
@@ -225,7 +249,8 @@ const WatermarkResizeApp = () => {
         const processedBlob = await processImage(
           image.src,
           watermark?.src,
-          config
+          config,
+          imagesDimensions[image.id]
         );
         
         processedImages.push({
@@ -396,9 +421,14 @@ const WatermarkResizeApp = () => {
                     className="w-4 h-4 text-purple-600"
                   />
                   <label htmlFor="maintainAspect" className="text-sm text-gray-700">
-                    Manter proporção
+                    Manter proporção (sem sobras)
                   </label>
                 </div>
+                <p className="text-xs text-gray-500 ml-6">
+                  {config.maintainAspect ? 
+                    'Paisagem: altura ajustada proporcionalmente. Retrato: largura ajustada proporcionalmente.' : 
+                    'A imagem será esticada para caber exatamente nas dimensões definidas'}
+                </p>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -579,40 +609,64 @@ const WatermarkResizeApp = () => {
             <div className="border-2 border-dashed border-purple-300 rounded-lg p-4 min-h-64 flex items-center justify-center">
               {images.length > 0 ? (
                 <div className="relative">
-                  <div 
-                    className={`relative bg-gray-100 border-2 border-gray-200 rounded ${
-                      previewMode === 'landscape' ? 'w-64 h-36' : 'w-36 h-64'
-                    }`}
-                  >
-                    <img
-                      src={images[0].processedUrl || images[0].src}
-                      alt="Preview"
-                      className="w-full h-full object-cover rounded"
-                    />
-                    {watermark && !images[0].processedUrl && (
-                      <div
-                        className="absolute"
-                        style={{
-                          ...getPositionStyle(config.position),
-                          opacity: config.opacity,
-                          width: `${config.watermarkSize}%`,
-                          filter: config.shadowEnabled ? 
-                            `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, '0')})` : 
-                            'none'
-                        }}
-                      >
-                        <img
-                          src={watermark.src}
-                          alt="Watermark"
-                          className="w-full h-auto"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600 text-center mt-2">
-                    {config.width} x {config.height}px
-                    {images[0].processed && <span className="text-green-600 ml-2">✓ Processada</span>}
-                  </p>
+                  {(() => {
+                    // Encontrar primeira imagem do tipo selecionado usando as dimensões armazenadas
+                    const targetImage = previewMode === 'landscape' 
+                      ? images.find(img => {
+                          const dims = imagesDimensions[img.id];
+                          return dims && !dims.isVertical;
+                        }) || images[0]
+                      : images.find(img => {
+                          const dims = imagesDimensions[img.id];
+                          return dims && dims.isVertical;
+                        }) || images[0];
+                    
+                    const imageDims = imagesDimensions[targetImage.id];
+                    
+                    return (
+                      <>
+                        <div 
+                          className={`relative bg-gray-100 border-2 border-gray-200 rounded ${
+                            previewMode === 'landscape' ? 'w-64 h-36' : 'w-36 h-64'
+                          }`}
+                        >
+                          <img
+                            src={targetImage.processedUrl || targetImage.src}
+                            alt="Preview"
+                            className="w-full h-full object-contain bg-white rounded"
+                          />
+                          {watermark && !targetImage.processedUrl && (
+                            <div
+                              className="absolute"
+                              style={{
+                                ...getPositionStyle(config.position),
+                                opacity: config.opacity,
+                                width: `${config.watermarkSize}%`,
+                                filter: config.shadowEnabled ? 
+                                  `drop-shadow(${config.shadowOffsetX}px ${config.shadowOffsetY}px ${config.shadowBlur}px ${config.shadowColor}${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, '0')})` : 
+                                  'none'
+                              }}
+                            >
+                              <img
+                                src={watermark.src}
+                                alt="Watermark"
+                                className="w-full h-auto"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600 text-center mt-2">
+                          Base: {config.width} x {config.height}px • {previewMode === 'landscape' ? 'Paisagem' : 'Retrato'}
+                          {imageDims && (
+                            <span className="text-gray-500 ml-2">
+                              (Original: {imageDims.width}x{imageDims.height})
+                            </span>
+                          )}
+                          {targetImage.processed && <span className="text-green-600 ml-2">✓ Processada</span>}
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center text-gray-500">
@@ -674,6 +728,12 @@ const WatermarkResizeApp = () => {
                       </p>
                       <p className="text-xs text-gray-500">
                         {image.processed ? 'Processada ✓' : isProcessing ? 'Processando...' : 'Aguardando'}
+                        {imagesDimensions[image.id] && (
+                          <span className="ml-2">
+                            • {imagesDimensions[image.id].width}x{imagesDimensions[image.id].height}
+                            {imagesDimensions[image.id].isVertical ? ' (Retrato)' : ' (Paisagem)'}
+                          </span>
+                        )}
                       </p>
                     </div>
                     {image.processed && (
