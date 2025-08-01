@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PC Watermark Resize App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div id="root"></div>
+
+    <script type="module">
+      // Import React from CDN (matching component version)
+      import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+      import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+
+      // Hatch client initialization with localStorage-based storage
+      const initHatchClient = async (useEffect, useState) => {
+          // Try to load stored state from JSON file, fallback to inline data
+          let initialStorage = {};
+          try {
+              const response = await fetch('./storedState.json');
+              initialStorage = await response.json();
+          } catch (error) {
+              console.warn('Could not load storedState.json, using inline data:', error);
+              // Fallback to inline stored state data for file:// URLs
+              initialStorage = {};
+          }
+
+          // Initialize localStorage with stored state
+          const STORAGE_PREFIX = 'hatch_component_';
+          Object.entries(initialStorage).forEach(([key, value]) => {
+              const storageKey = STORAGE_PREFIX + key;
+              if (!localStorage.getItem(storageKey)) {
+                  localStorage.setItem(storageKey, JSON.stringify(value));
+              }
+          });
+
+          // Implement useStoredState hook compatible with Hatch
+          const useStoredState = (key, defaultValue) => {
+              const storageKey = STORAGE_PREFIX + key;
+
+              // Get initial value from localStorage or use default
+              const getStoredValue = () => {
+                  try {
+                      const item = localStorage.getItem(storageKey);
+                      return item ? JSON.parse(item) : defaultValue;
+                  } catch (error) {
+                      console.warn('Error reading from localStorage:', error);
+                      return defaultValue;
+                  }
+              };
+
+              const [value, setValue] = useState(getStoredValue);
+
+              // Update localStorage when value changes
+              const setStoredValue = (newValue) => {
+                  try {
+                      const valueToStore = typeof newValue === 'function' ? newValue(value) : newValue;
+                      localStorage.setItem(storageKey, JSON.stringify(valueToStore));
+                      setValue(valueToStore);
+                  } catch (error) {
+                      console.error('Error writing to localStorage:', error);
+                  }
+              };
+
+              // Listen for storage changes from other tabs/windows
+              useEffect(() => {
+                  const handleStorageChange = (e) => {
+                      if (e.key === storageKey && e.newValue) {
+                          try {
+                              setValue(JSON.parse(e.newValue));
+                          } catch (error) {
+                              console.warn('Error parsing storage change:', error);
+                          }
+                      }
+                  };
+
+                  window.addEventListener('storage', handleStorageChange);
+                  return () => window.removeEventListener('storage', handleStorageChange);
+              }, [storageKey]);
+
+              return [value, setStoredValue];
+          };
+
+          // Set up global Hatch client interface
+          window.hatch = {
+              useStoredState,
+              // Mock implementations for other Hatch features
+              useUser: () => ({ id: 'local', name: 'Local User', color: '#4F46E5' }),
+              useCollaborators: () => [],
+              useAssets: () => [],
+              getAllItems: async () => {
+                  const items = {};
+                  for (let i = 0; i < localStorage.length; i++) {
+                      const key = localStorage.key(i);
+                      if (key && key.startsWith(STORAGE_PREFIX)) {
+                          const itemKey = key.replace(STORAGE_PREFIX, '');
+                          try {
+                              items[itemKey] = JSON.parse(localStorage.getItem(key));
+                          } catch (error) {
+                              console.warn('Error parsing stored item:', key, error);
+                          }
+                      }
+                  }
+                  return items;
+              },
+              getItem: async (key) => {
+                  try {
+                      const item = localStorage.getItem(STORAGE_PREFIX + key);
+                      return item ? JSON.parse(item) : undefined;
+                  } catch (error) {
+                      console.warn('Error getting item:', key, error);
+                      return undefined;
+                  }
+              },
+              setItem: async (key, value) => {
+                  try {
+                      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+                  } catch (error) {
+                      console.error('Error setting item:', key, error);
+                  }
+              }
+          };
+
+          // Backward compatibility and global availability
+          window.useStoredState = useStoredState;
+          window.React = React;
+          window.useState = useState;
+          window.useEffect = useEffect;
+      };
+
+      // Initialize Hatch client
+      await initHatchClient(useEffect, useState);
+
+      try {
+          // Try to load component from external file, fallback to inline code
+          let componentCode;
+          try {
+              const response = await fetch('./component.js');
+              componentCode = await response.text();
+          } catch (fetchError) {
+              console.warn('Could not load component.js, using inline code:', fetchError);
+              // Fallback to inline component code for file:// URLs
+              componentCode = `// <stdin>
+import React, { useState, useRef } from "https://esm.sh/react@18.2.0";
+import { Upload, Image, Settings, Eye, Download, FileImage } from "https://esm.sh/lucide-react?deps=react@18.2.0,react-dom@18.2.0";
+import JSZip from "https://esm.sh/jszip?deps=react@18.2.0,react-dom@18.2.0";
+var WatermarkResizeApp = () => {
+  const [images, setImages] = useState([]);
+  const [watermark, setWatermark] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [config, setConfig] = useState({
+    width: 1920,
+    height: 1080,
+    maintainAspect: true,
+    position: "bottom-right",
+    opacity: 0.7,
+    watermarkSize: 20,
+    shadowEnabled: false,
+    shadowBlur: 5,
+    shadowColor: "#000000",
+    shadowOpacity: 0.5,
+    shadowOffsetX: 2,
+    shadowOffsetY: 2
+  });
+  const [previewMode, setPreviewMode] = useState("landscape");
+  const imageInputRef = useRef(null);
+  const watermarkInputRef = useRef(null);
+  const handleImageUpload = (event) => {
+    const files = Array.from(event.target.files);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImages((prev) => [...prev, {
+          id: Date.now() + Math.random(),
+          name: file.name,
+          src: e.target.result,
+          processed: false
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+  const handleWatermarkUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setWatermark({
+          name: file.name,
+          src: e.target.result
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  const getPositionStyle = (position) => {
+    const positions = {
+      "top-left": { top: "10px", left: "10px" },
+      "top-right": { top: "10px", right: "10px" },
+      "bottom-left": { bottom: "10px", left: "10px" },
+      "bottom-right": { bottom: "10px", right: "10px" },
+      "bottom-center": { bottom: "10px", left: "50%", transform: "translateX(-50%)" },
+      "center": { top: "50%", left: "50%", transform: "translate(-50%, -50%)" }
+    };
+    return positions[position] || positions["bottom-right"];
+  };
+  const processImage = (imageData, watermarkData, config2) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = config2.width;
+        canvas.height = config2.height;
+        let drawWidth = config2.width;
+        let drawHeight = config2.height;
+        if (config2.maintainAspect) {
+          const imgAspect = img.width / img.height;
+          const canvasAspect = config2.width / config2.height;
+          if (imgAspect > canvasAspect) {
+            drawHeight = config2.width / imgAspect;
+          } else {
+            drawWidth = config2.height * imgAspect;
+          }
+        }
+        const x = (config2.width - drawWidth) / 2;
+        const y = (config2.height - drawHeight) / 2;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, config2.width, config2.height);
+        ctx.drawImage(img, x, y, drawWidth, drawHeight);
+        if (watermarkData) {
+          const watermarkImg = new Image();
+          watermarkImg.onload = () => {
+            const watermarkWidth = config2.width * config2.watermarkSize / 100;
+            const watermarkHeight = watermarkImg.height * watermarkWidth / watermarkImg.width;
+            let watermarkX, watermarkY;
+            const margin = 20;
+            switch (config2.position) {
+              case "top-left":
+                watermarkX = margin;
+                watermarkY = margin;
+                break;
+              case "top-right":
+                watermarkX = config2.width - watermarkWidth - margin;
+                watermarkY = margin;
+                break;
+              case "bottom-left":
+                watermarkX = margin;
+                watermarkY = config2.height - watermarkHeight - margin;
+                break;
+              case "bottom-right":
+                watermarkX = config2.width - watermarkWidth - margin;
+                watermarkY = config2.height - watermarkHeight - margin;
+                break;
+              case "bottom-center":
+                watermarkX = (config2.width - watermarkWidth) / 2;
+                watermarkY = config2.height - watermarkHeight - margin;
+                break;
+              case "center":
+                watermarkX = (config2.width - watermarkWidth) / 2;
+                watermarkY = (config2.height - watermarkHeight) / 2;
+                break;
+              default:
+                watermarkX = config2.width - watermarkWidth - margin;
+                watermarkY = config2.height - watermarkHeight - margin;
+            }
+            if (config2.shadowEnabled) {
+              ctx.shadowColor = config2.shadowColor;
+              ctx.shadowBlur = config2.shadowBlur;
+              ctx.shadowOffsetX = config2.shadowOffsetX;
+              ctx.shadowOffsetY = config2.shadowOffsetY;
+              ctx.globalAlpha = config2.shadowOpacity;
+              ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+              ctx.shadowColor = "transparent";
+              ctx.shadowBlur = 0;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 0;
+            }
+            ctx.globalAlpha = config2.opacity;
+            ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkWidth, watermarkHeight);
+            ctx.globalAlpha = 1;
+            canvas.toBlob(resolve, "image/jpeg", 0.9);
+          };
+          watermarkImg.src = watermarkData;
+        } else {
+          canvas.toBlob(resolve, "image/jpeg", 0.9);
+        }
+      };
+      img.src = imageData;
+    });
+  };
+  const processImages = async () => {
+    setIsProcessing(true);
+    try {
+      const processedImages = [];
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i];
+        const processedBlob = await processImage(
+          image.src,
+          watermark?.src,
+          config
+        );
+        processedImages.push({
+          ...image,
+          processed: true,
+          processedBlob,
+          processedUrl: URL.createObjectURL(processedBlob)
+        });
+        setImages((prev) => prev.map(
+          (img, index) => index <= i ? processedImages[index] || img : img
+        ));
+      }
+    } catch (error) {
+      console.error("Erro ao processar imagens:", error);
+      alert("Erro ao processar imagens. Tente novamente.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  const downloadAll = async () => {
+    const processedImages = images.filter((img) => img.processed && img.processedBlob);
+    if (processedImages.length === 0) {
+      alert("Nenhuma imagem processada para download.");
+      return;
+    }
+    try {
+      const zip = new JSZip();
+      processedImages.forEach((image, index) => {
+        const fileName = \`processed_\${image.name}\`;
+        zip.file(fileName, image.processedBlob);
+      });
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = \`processed_images_\${(/* @__PURE__ */ new Date()).getTime()}.zip\`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error("Erro ao criar ZIP:", error);
+      alert("Erro ao criar arquivo ZIP. Tente novamente.");
+    }
+  };
+  return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-gray-50 p-6" }, /* @__PURE__ */ React.createElement("div", { className: "max-w-7xl mx-auto" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3 mb-2" }, /* @__PURE__ */ React.createElement(
+    "img",
+    {
+      src: "assets/N7adwwGfz_Wu_7ORSgQjs.png",
+      alt: "Logo",
+      className: "w-8 h-8 rounded"
+    }
+  ), /* @__PURE__ */ React.createElement("h1", { className: "text-xl font-bold text-gray-800 whitespace-nowrap" }, "PC WATERMARK RESIZE")), /* @__PURE__ */ React.createElement("p", { className: "text-gray-600" }, "Redimensione e adicione sua marca d'\\xE1gua em v\\xE1rias imagens")), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Upload, { className: "w-5 h-5" }), "Carregar Arquivos"), /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => imageInputRef.current?.click(),
+      className: "w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement(FileImage, { className: "w-5 h-5" }),
+    "Carregar Imagens"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => watermarkInputRef.current?.click(),
+      className: "w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement(Image, { className: "w-5 h-5" }),
+    "Carregar Marca D'\\xE1gua"
+  ), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      ref: imageInputRef,
+      type: "file",
+      multiple: true,
+      accept: "image/*",
+      onChange: handleImageUpload,
+      className: "hidden"
+    }
+  ), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      ref: watermarkInputRef,
+      type: "file",
+      accept: "image/*",
+      onChange: handleWatermarkUpload,
+      className: "hidden"
+    }
+  )), watermark && /* @__PURE__ */ React.createElement("div", { className: "mt-3 p-3 bg-green-50 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, "\\u2713 Marca d'\\xE1gua: ", watermark.name))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Settings, { className: "w-5 h-5" }), "Configurar"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Largura (px)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      value: config.width,
+      onChange: (e) => setConfig((prev) => ({ ...prev, width: parseInt(e.target.value) })),
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Altura (px)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      value: config.height,
+      onChange: (e) => setConfig((prev) => ({ ...prev, height: parseInt(e.target.value) })),
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "checkbox",
+      id: "maintainAspect",
+      checked: config.maintainAspect,
+      onChange: (e) => setConfig((prev) => ({ ...prev, maintainAspect: e.target.checked })),
+      className: "w-4 h-4 text-purple-600"
+    }
+  ), /* @__PURE__ */ React.createElement("label", { htmlFor: "maintainAspect", className: "text-sm text-gray-700" }, "Manter propor\\xE7\\xE3o")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Posicionamento da Marca D'\\xE1gua"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2 text-xs" }, [
+    { value: "top-left", label: "Superior Esquerdo" },
+    { value: "top-right", label: "Superior Direito" },
+    { value: "bottom-left", label: "Inferior Esquerdo" },
+    { value: "bottom-right", label: "Inferior Direito" },
+    { value: "bottom-center", label: "Inferior Centro" },
+    { value: "center", label: "Centro" }
+  ].map((pos) => /* @__PURE__ */ React.createElement("label", { key: pos.value, className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "radio",
+      name: "position",
+      value: pos.value,
+      checked: config.position === pos.value,
+      onChange: (e) => setConfig((prev) => ({ ...prev, position: e.target.value })),
+      className: "w-3 h-3"
+    }
+  ), pos.label)))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Opacidade: ", Math.round(config.opacity * 100), "%"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "0",
+      max: "1",
+      step: "0.1",
+      value: config.opacity,
+      onChange: (e) => setConfig((prev) => ({ ...prev, opacity: parseFloat(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer slider"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Tamanho da Marca: ", config.watermarkSize, "%"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "5",
+      max: "50",
+      value: config.watermarkSize,
+      onChange: (e) => setConfig((prev) => ({ ...prev, watermarkSize: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "border-t pt-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-3" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "checkbox",
+      id: "shadowEnabled",
+      checked: config.shadowEnabled,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowEnabled: e.target.checked })),
+      className: "w-4 h-4 text-purple-600"
+    }
+  ), /* @__PURE__ */ React.createElement("label", { htmlFor: "shadowEnabled", className: "text-sm font-medium text-gray-700" }, "Ativar Sombra na Logo")), config.shadowEnabled && /* @__PURE__ */ React.createElement("div", { className: "space-y-3 ml-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Desfoque: ", config.shadowBlur, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "0",
+      max: "20",
+      value: config.shadowBlur,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowBlur: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Deslocamento X: ", config.shadowOffsetX, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "-10",
+      max: "10",
+      value: config.shadowOffsetX,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowOffsetX: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Deslocamento Y: ", config.shadowOffsetY, "px"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "-10",
+      max: "10",
+      value: config.shadowOffsetY,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowOffsetY: parseInt(e.target.value) })),
+      className: "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Opacidade da Sombra: ", Math.round(config.shadowOpacity * 100), "%"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "range",
+      min: "0",
+      max: "1",
+      step: "0.1",
+      value: config.shadowOpacity,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowOpacity: parseFloat(e.target.value) })),
+      className: "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, "Cor da Sombra"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "color",
+      value: config.shadowColor,
+      onChange: (e) => setConfig((prev) => ({ ...prev, shadowColor: e.target.value })),
+      className: "w-8 h-8 rounded border border-gray-300 cursor-pointer"
+    }
+  ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-gray-500" }, config.shadowColor)))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800 flex items-center gap-2" }, /* @__PURE__ */ React.createElement(Eye, { className: "w-5 h-5" }), "Pr\\xE9-visualiza\\xE7\\xE3o"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setPreviewMode("landscape"),
+      className: \`px-3 py-1 text-xs rounded \${previewMode === "landscape" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}\`
+    },
+    "Paisagem"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setPreviewMode("portrait"),
+      className: \`px-3 py-1 text-xs rounded \${previewMode === "portrait" ? "bg-purple-600 text-white" : "bg-gray-200 text-gray-700"}\`
+    },
+    "Retrato"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "border-2 border-dashed border-purple-300 rounded-lg p-4 min-h-64 flex items-center justify-center" }, images.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "relative" }, /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: \`relative bg-gray-100 border-2 border-gray-200 rounded \${previewMode === "landscape" ? "w-64 h-36" : "w-36 h-64"}\`
+    },
+    /* @__PURE__ */ React.createElement(
+      "img",
+      {
+        src: images[0].processedUrl || images[0].src,
+        alt: "Preview",
+        className: "w-full h-full object-cover rounded"
+      }
+    ),
+    watermark && !images[0].processedUrl && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "absolute",
+        style: {
+          ...getPositionStyle(config.position),
+          opacity: config.opacity,
+          width: \`\${config.watermarkSize}%\`,
+          filter: config.shadowEnabled ? \`drop-shadow(\${config.shadowOffsetX}px \${config.shadowOffsetY}px \${config.shadowBlur}px \${config.shadowColor}\${Math.round(config.shadowOpacity * 255).toString(16).padStart(2, "0")})\` : "none"
+        }
+      },
+      /* @__PURE__ */ React.createElement(
+        "img",
+        {
+          src: watermark.src,
+          alt: "Watermark",
+          className: "w-full h-auto"
+        }
+      )
+    )
+  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 text-center mt-2" }, config.width, " x ", config.height, "px", images[0].processed && /* @__PURE__ */ React.createElement("span", { className: "text-green-600 ml-2" }, "\\u2713 Processada"))) : /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement(Image, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Carregue uma imagem para ver a pr\\xE9-visualiza\\xE7\\xE3o")))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-sm p-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between mb-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-lg font-semibold text-gray-800" }, "Suas Imagens (", images.length, ")"), images.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: processImages,
+      disabled: isProcessing || images.length === 0,
+      className: "bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+    },
+    isProcessing ? "Processando..." : "Processar"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: downloadAll,
+      disabled: !images.some((img) => img.processed),
+      className: "bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center gap-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
+    },
+    /* @__PURE__ */ React.createElement(Download, { className: "w-4 h-4" }),
+    "Baixar ZIP"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "space-y-3 max-h-96 overflow-y-auto" }, images.length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500 py-8" }, /* @__PURE__ */ React.createElement(FileImage, { className: "w-12 h-12 mx-auto mb-2 opacity-50" }), /* @__PURE__ */ React.createElement("p", null, "Nenhuma imagem carregada"), /* @__PURE__ */ React.createElement("p", { className: "text-sm" }, "Fa\\xE7a upload das suas imagens")) : images.map((image, index) => /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      key: image.id,
+      className: \`flex items-center gap-3 p-3 rounded-lg border \${image.processed ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}\`
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "w-12 h-12 bg-purple-100 rounded flex items-center justify-center" }, /* @__PURE__ */ React.createElement(FileImage, { className: "w-6 h-6 text-purple-600" })),
+    /* @__PURE__ */ React.createElement("div", { className: "flex-1 min-w-0" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm font-medium text-gray-800 truncate" }, image.name), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-500" }, image.processed ? "Processada \\u2713" : isProcessing ? "Processando..." : "Aguardando")),
+    image.processed && /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-green-500 rounded-full flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-white rounded-full" }))
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "mt-8 text-center" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-500" }, "\\xA9 2025 PauloCunhaMKT Solu\\xE7\\xF5es TI \\u2022 v1.1.0"))));
+};
+var stdin_default = WatermarkResizeApp;
+export {
+  stdin_default as default
+};
+`;
+          }
+
+          // Create a blob URL from the executable code
+          const blob = new Blob([componentCode], { type: 'text/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          // Import the default export from the blob URL
+          const moduleImport = await import(blobUrl);
+          const Component = moduleImport.default;
+
+          // Clean up the blob URL
+          URL.revokeObjectURL(blobUrl);
+
+          if (Component) {
+              const rootElement = document.getElementById('root');
+              const root = createRoot(rootElement);
+
+              // Simple error boundary
+              const ErrorBoundary = ({ children }) => {
+                  try {
+                      return children;
+                  } catch (error) {
+                      console.error('Component render error:', error);
+                      return React.createElement('div', {
+                          style: { padding: '20px', color: '#d32f2f', background: '#ffebee', borderRadius: '4px' }
+                      }, [
+                          React.createElement('h3', { key: 'title' }, 'Component Error'),
+                          React.createElement('p', { key: 'error' }, 'Error: ' + error.message)
+                      ]);
+                  }
+              };
+
+              root.render(React.createElement(ErrorBoundary, {}, React.createElement(Component)));
+          } else {
+              console.error('No component found in module export');
+              document.getElementById('root').innerHTML = '<div style="padding: 20px; color: #666;">No React component found - check console for details</div>';
+          }
+      } catch (error) {
+          console.error('Error loading component:', error);
+          document.getElementById('root').innerHTML = `
+              <div style="padding: 20px; color: #d32f2f; background: #ffebee; border-radius: 4px;">
+                  <h3>Error loading component</h3>
+                  <p><strong>Error:</strong> ${error.message}</p>
+                  <p>Please check the browser console for more details.</p>
+              </div>
+          `;
+      }
+    </script>
+  </body>
+</html>
