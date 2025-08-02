@@ -1,12 +1,305 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, Settings, Eye, Download, FileImage } from 'lucide-react';
+import { Upload, Image as ImageIcon, Settings, Eye, Download, FileImage, Globe } from 'lucide-react';
 import JSZip from 'jszip';
+
+// Configurações de idiomas
+const languages = {
+  pt: {
+    code: 'pt',
+    name: 'Português',
+    flag: '🇧🇷',
+    translations: {
+      // Header
+      appTitle: 'MarkResize',
+      appSubtitle: 'Redimensione e adicione sua marca d\'água em várias imagens',
+      
+      // Upload Section
+      uploadFiles: 'Carregar Arquivos',
+      uploadImages: 'Carregar Imagens',
+      uploadWatermark: 'Carregar Marca D\'água',
+      watermarkTypes: {
+        image: 'Imagem',
+        text: 'Texto',
+        pattern: 'Padrão'
+      },
+      
+      // Text Watermark
+      textLabel: 'Texto da Marca',
+      textPlaceholder: 'Digite o texto...',
+      font: 'Fonte',
+      textSize: 'Tamanho',
+      textColor: 'Cor do Texto',
+      rotation: 'Rotação',
+      
+      // Pattern
+      patternText: 'Texto do Padrão',
+      patternPlaceholder: 'SAMPLE',
+      spacing: 'Espaçamento',
+      
+      // Configuration
+      configure: 'Configurar',
+      width: 'Largura (px)',
+      height: 'Altura (px)',
+      maintainAspect: 'Manter proporção (sem sobras)',
+      aspectHelp: 'Paisagem: altura ajustada proporcionalmente. Retrato: largura ajustada proporcionalmente.',
+      aspectHelpOff: 'A imagem será esticada para caber exatamente nas dimensões definidas',
+      
+      // Position
+      positioning: 'Posicionamento da Marca D\'água',
+      positions: {
+        'top-left': 'Superior Esquerdo',
+        'top-right': 'Superior Direito',
+        'bottom-left': 'Inferior Esquerdo',
+        'bottom-right': 'Inferior Direito',
+        'bottom-center': 'Inferior Centro',
+        'center': 'Centro'
+      },
+      
+      // Effects
+      opacity: 'Opacidade',
+      watermarkSize: 'Tamanho da Marca',
+      shadowEffects: 'Ativar Sombra na Logo',
+      blur: 'Desfoque',
+      offsetX: 'Deslocamento X',
+      offsetY: 'Deslocamento Y',
+      shadowOpacity: 'Opacidade da Sombra',
+      shadowColor: 'Cor da Sombra',
+      
+      // Preview
+      preview: 'Pré-visualização',
+      landscape: 'Paisagem',
+      portrait: 'Retrato',
+      previewPlaceholder: 'Carregue uma imagem para ver a pré-visualização',
+      
+      // Images List
+      yourImages: 'Suas Imagens',
+      process: 'Processar',
+      processing: 'Processando...',
+      downloadZip: 'Baixar ZIP',
+      noImages: 'Nenhuma imagem carregada',
+      uploadImagesHint: 'Faça upload das suas imagens',
+      
+      // Status
+      processed: 'Processada ✓',
+      waiting: 'Aguardando',
+      
+      // Messages
+      watermarkSuccess: '✓ Marca d\'água:',
+      textSuccess: '✓ Texto:',
+      noImagesToProcess: 'Nenhuma imagem carregada para processar.',
+      selectWatermarkImage: 'Selecione uma imagem para marca d\'água ou use o modo de texto.',
+      enterWatermarkText: 'Digite um texto para a marca d\'água.',
+      noProcessedImages: 'Nenhuma imagem processada para download.',
+      
+      // Footer
+      footer: '© 2025 PauloCunhaMKT Soluções TI • v1.1.0',
+      
+      // Dimensions
+      base: 'Base',
+      original: 'Original'
+    }
+  },
+  
+  en: {
+    code: 'en',
+    name: 'English',
+    flag: '🇺🇸',
+    translations: {
+      // Header
+      appTitle: 'MarkResize',
+      appSubtitle: 'Resize and add watermarks to multiple images',
+      
+      // Upload Section
+      uploadFiles: 'Upload Files',
+      uploadImages: 'Upload Images',
+      uploadWatermark: 'Upload Watermark',
+      watermarkTypes: {
+        image: 'Image',
+        text: 'Text',
+        pattern: 'Pattern'
+      },
+      
+      // Text Watermark
+      textLabel: 'Watermark Text',
+      textPlaceholder: 'Enter text...',
+      font: 'Font',
+      textSize: 'Size',
+      textColor: 'Text Color',
+      rotation: 'Rotation',
+      
+      // Pattern
+      patternText: 'Pattern Text',
+      patternPlaceholder: 'SAMPLE',
+      spacing: 'Spacing',
+      
+      // Configuration
+      configure: 'Configure',
+      width: 'Width (px)',
+      height: 'Height (px)',
+      maintainAspect: 'Maintain aspect ratio (no crop)',
+      aspectHelp: 'Landscape: height adjusted proportionally. Portrait: width adjusted proportionally.',
+      aspectHelpOff: 'Image will be stretched to fit exactly the defined dimensions',
+      
+      // Position
+      positioning: 'Watermark Positioning',
+      positions: {
+        'top-left': 'Top Left',
+        'top-right': 'Top Right',
+        'bottom-left': 'Bottom Left',
+        'bottom-right': 'Bottom Right',
+        'bottom-center': 'Bottom Center',
+        'center': 'Center'
+      },
+      
+      // Effects
+      opacity: 'Opacity',
+      watermarkSize: 'Watermark Size',
+      shadowEffects: 'Enable Logo Shadow',
+      blur: 'Blur',
+      offsetX: 'X Offset',
+      offsetY: 'Y Offset',
+      shadowOpacity: 'Shadow Opacity',
+      shadowColor: 'Shadow Color',
+      
+      // Preview
+      preview: 'Preview',
+      landscape: 'Landscape',
+      portrait: 'Portrait',
+      previewPlaceholder: 'Upload an image to see preview',
+      
+      // Images List
+      yourImages: 'Your Images',
+      process: 'Process',
+      processing: 'Processing...',
+      downloadZip: 'Download ZIP',
+      noImages: 'No images uploaded',
+      uploadImagesHint: 'Upload your images',
+      
+      // Status
+      processed: 'Processed ✓',
+      waiting: 'Waiting',
+      
+      // Messages
+      watermarkSuccess: '✓ Watermark:',
+      textSuccess: '✓ Text:',
+      noImagesToProcess: 'No images loaded to process.',
+      selectWatermarkImage: 'Select a watermark image or use text mode.',
+      enterWatermarkText: 'Enter text for the watermark.',
+      noProcessedImages: 'No processed images to download.',
+      
+      // Footer
+      footer: '© 2025 PauloCunhaMKT Tech Solutions • v1.1.0',
+      
+      // Dimensions
+      base: 'Base',
+      original: 'Original'
+    }
+  },
+  
+  es: {
+    code: 'es',
+    name: 'Español',
+    flag: '🇪🇸',
+    translations: {
+      // Header
+      appTitle: 'MarkResize',
+      appSubtitle: 'Redimensiona y añade marcas de agua a múltiples imágenes',
+      
+      // Upload Section
+      uploadFiles: 'Subir Archivos',
+      uploadImages: 'Subir Imágenes',
+      uploadWatermark: 'Subir Marca de Agua',
+      watermarkTypes: {
+        image: 'Imagen',
+        text: 'Texto',
+        pattern: 'Patrón'
+      },
+      
+      // Text Watermark
+      textLabel: 'Texto de Marca',
+      textPlaceholder: 'Ingrese texto...',
+      font: 'Fuente',
+      textSize: 'Tamaño',
+      textColor: 'Color del Texto',
+      rotation: 'Rotación',
+      
+      // Pattern
+      patternText: 'Texto del Patrón',
+      patternPlaceholder: 'MUESTRA',
+      spacing: 'Espaciado',
+      
+      // Configuration
+      configure: 'Configurar',
+      width: 'Ancho (px)',
+      height: 'Alto (px)',
+      maintainAspect: 'Mantener proporción (sin recorte)',
+      aspectHelp: 'Paisaje: altura ajustada proporcionalmente. Retrato: ancho ajustado proporcionalmente.',
+      aspectHelpOff: 'La imagen se estirará para ajustarse exactamente a las dimensiones definidas',
+      
+      // Position
+      positioning: 'Posicionamiento de Marca de Agua',
+      positions: {
+        'top-left': 'Superior Izquierda',
+        'top-right': 'Superior Derecha',
+        'bottom-left': 'Inferior Izquierda',
+        'bottom-right': 'Inferior Derecha',
+        'bottom-center': 'Inferior Centro',
+        'center': 'Centro'
+      },
+      
+      // Effects
+      opacity: 'Opacidad',
+      watermarkSize: 'Tamaño de Marca',
+      shadowEffects: 'Activar Sombra del Logo',
+      blur: 'Desenfoque',
+      offsetX: 'Desplazamiento X',
+      offsetY: 'Desplazamiento Y',
+      shadowOpacity: 'Opacidad de Sombra',
+      shadowColor: 'Color de Sombra',
+      
+      // Preview
+      preview: 'Vista Previa',
+      landscape: 'Paisaje',
+      portrait: 'Retrato',
+      previewPlaceholder: 'Sube una imagen para ver la vista previa',
+      
+      // Images List
+      yourImages: 'Tus Imágenes',
+      process: 'Procesar',
+      processing: 'Procesando...',
+      downloadZip: 'Descargar ZIP',
+      noImages: 'No hay imágenes subidas',
+      uploadImagesHint: 'Sube tus imágenes',
+      
+      // Status
+      processed: 'Procesada ✓',
+      waiting: 'Esperando',
+      
+      // Messages
+      watermarkSuccess: '✓ Marca de agua:',
+      textSuccess: '✓ Texto:',
+      noImagesToProcess: 'No hay imágenes cargadas para procesar.',
+      selectWatermarkImage: 'Selecciona una imagen de marca de agua o usa el modo texto.',
+      enterWatermarkText: 'Ingresa texto para la marca de agua.',
+      noProcessedImages: 'No hay imágenes procesadas para descargar.',
+      
+      // Footer
+      footer: '© 2025 PauloCunhaMKT Soluciones TI • v1.1.0',
+      
+      // Dimensions
+      base: 'Base',
+      original: 'Original'
+    }
+  }
+};
 
 const WatermarkResizeApp = () => {
   const [images, setImages] = useState([]);
   const [watermark, setWatermark] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [imagesDimensions, setImagesDimensions] = useState({});
+  const [currentLanguage, setCurrentLanguage] = useState('pt');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [config, setConfig] = useState({
     width: 1920,
     height: 1080,
@@ -34,6 +327,17 @@ const WatermarkResizeApp = () => {
   
   const imageInputRef = useRef(null);
   const watermarkInputRef = useRef(null);
+  
+  // Função para obter traduções
+  const t = (key) => {
+    const keys = key.split('.');
+    let value = languages[currentLanguage].translations;
+    for (const k of keys) {
+      value = value[k];
+      if (!value) return key; // Fallback para a chave se não encontrar tradução
+    }
+    return value;
+  };
 
   const handleImageUpload = (event) => {
     const files = Array.from(event.target.files);
@@ -336,18 +640,18 @@ const WatermarkResizeApp = () => {
 
   const processImages = async () => {
     if (images.length === 0) {
-      alert('Nenhuma imagem carregada para processar.');
+      alert(t('noImagesToProcess'));
       return;
     }
     
     // Validar se temos marca d'água configurada
     if (config.watermarkType === 'image' && !watermark) {
-      alert('Selecione uma imagem para marca d\'água ou use o modo de texto.');
+      alert(t('selectWatermarkImage'));
       return;
     }
     
     if ((config.watermarkType === 'text' || config.watermarkType === 'pattern') && !config.textWatermark.trim()) {
-      alert('Digite um texto para a marca d\'água.');
+      alert(t('enterWatermarkText'));
       return;
     }
 
@@ -396,7 +700,7 @@ const WatermarkResizeApp = () => {
     const processedImages = images.filter(img => img.processed && img.processedBlob);
     
     if (processedImages.length === 0) {
-      alert('Nenhuma imagem processada para download.');
+      alert(t('noProcessedImages'));
       return;
     }
     
@@ -434,15 +738,52 @@ const WatermarkResizeApp = () => {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <img 
-              src="assets/N7adwwGfz_Wu_7ORSgQjs.png" 
-              alt="Logo" 
-              className="w-8 h-8 rounded" 
-            />
-            <h1 className="text-xl font-bold text-gray-800 whitespace-nowrap">PC WATERMARK RESIZE</h1>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <img 
+                src="assets/vxiUCCZsIArK5m9Z9JAQN.png" 
+                alt="Logo" 
+                className="w-8 h-8 rounded" 
+              />
+              <h1 className="text-xl font-bold text-gray-800 whitespace-nowrap">{t('appTitle')}</h1>
+            </div>
+            
+            {/* Language Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                <span>{languages[currentLanguage].flag}</span>
+                <span className="text-sm font-medium">{languages[currentLanguage].name}</span>
+              </button>
+              
+              {showLanguageDropdown && (
+                <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-40">
+                  {Object.values(languages).map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        setCurrentLanguage(lang.code);
+                        setShowLanguageDropdown(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
+                        currentLanguage === lang.code ? 'bg-purple-50 text-purple-700' : 'text-gray-700'
+                      }`}
+                    >
+                      <span className="text-lg">{lang.flag}</span>
+                      <span className="text-sm font-medium">{lang.name}</span>
+                      {currentLanguage === lang.code && (
+                        <span className="ml-auto text-purple-600">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <p className="text-gray-600">Redimensione e adicione sua marca d'água em várias imagens</p>
+          <p className="text-gray-600">{t('appSubtitle')}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -452,7 +793,7 @@ const WatermarkResizeApp = () => {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <Upload className="w-5 h-5" />
-                Carregar Arquivos
+                {t('uploadFiles')}
               </h2>
               
               <div className="space-y-3">
@@ -461,7 +802,7 @@ const WatermarkResizeApp = () => {
                   className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <FileImage className="w-5 h-5" />
-                  Carregar Imagens
+                  {t('uploadImages')}
                 </button>
                 
                 <div className="space-y-2">
@@ -474,7 +815,7 @@ const WatermarkResizeApp = () => {
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
-                      Imagem
+                      {t('watermarkTypes.image')}
                     </button>
                     <button
                       onClick={() => setConfig(prev => ({ ...prev, watermarkType: 'text' }))}
@@ -484,7 +825,7 @@ const WatermarkResizeApp = () => {
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
-                      Texto
+                      {t('watermarkTypes.text')}
                     </button>
                     <button
                       onClick={() => setConfig(prev => ({ ...prev, watermarkType: 'pattern' }))}
@@ -494,7 +835,7 @@ const WatermarkResizeApp = () => {
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                     >
-                      Padrão
+                      {t('watermarkTypes.pattern')}
                     </button>
                   </div>
                   
@@ -504,7 +845,7 @@ const WatermarkResizeApp = () => {
                       className="w-full bg-purple-100 text-purple-700 py-3 px-4 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center gap-2"
                     >
                       <ImageIcon className="w-5 h-5" />
-                      Carregar Marca D'água
+                      {t('uploadWatermark')}
                     </button>
                   )}
                 </div>
@@ -531,13 +872,13 @@ const WatermarkResizeApp = () => {
                 <div className="mt-3 space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Texto da Marca
+                      {t('textLabel')}
                     </label>
                     <input
                       type="text"
                       value={config.textWatermark}
                       onChange={(e) => setConfig(prev => ({ ...prev, textWatermark: e.target.value }))}
-                      placeholder="Digite o texto..."
+                      placeholder={t('textPlaceholder')}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     />
                   </div>
@@ -545,7 +886,7 @@ const WatermarkResizeApp = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Fonte
+                        {t('font')}
                       </label>
                       <select
                         value={config.textFont}
@@ -563,7 +904,7 @@ const WatermarkResizeApp = () => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tamanho: {config.textSize}px
+                        {t('textSize')}: {config.textSize}px
                       </label>
                       <input
                         type="range"
@@ -579,7 +920,7 @@ const WatermarkResizeApp = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cor do Texto
+                        {t('textColor')}
                       </label>
                       <div className="flex items-center gap-2">
                         <input
@@ -594,7 +935,7 @@ const WatermarkResizeApp = () => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Rotação: {config.textRotation}°
+                        {t('rotation')}: {config.textRotation}°
                       </label>
                       <input
                         type="range"
@@ -613,20 +954,20 @@ const WatermarkResizeApp = () => {
                 <div className="mt-3 space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Texto do Padrão
+                      {t('patternText')}
                     </label>
                     <input
                       type="text"
                       value={config.textWatermark}
                       onChange={(e) => setConfig(prev => ({ ...prev, textWatermark: e.target.value }))}
-                      placeholder="SAMPLE"
+                      placeholder={t('patternPlaceholder')}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     />
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Espaçamento: {config.patternSpacing}px
+                      {t('spacing')}: {config.patternSpacing}px
                     </label>
                     <input
                       type="range"
@@ -641,7 +982,7 @@ const WatermarkResizeApp = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tamanho: {config.textSize}px
+                        {t('textSize')}: {config.textSize}px
                       </label>
                       <input
                         type="range"
@@ -655,7 +996,7 @@ const WatermarkResizeApp = () => {
                     
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cor do Texto
+                        {t('textColor')}
                       </label>
                       <input
                         type="color"
@@ -670,13 +1011,13 @@ const WatermarkResizeApp = () => {
 
               {watermark && config.watermarkType === 'image' && (
                 <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                  <p className="text-sm text-green-700">✓ Marca d'água: {watermark.name}</p>
+                  <p className="text-sm text-green-700">{t('watermarkSuccess')} {watermark.name}</p>
                 </div>
               )}
               
               {(config.watermarkType === 'text' || config.watermarkType === 'pattern') && config.textWatermark && (
                 <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                  <p className="text-sm text-green-700">✓ Texto: "{config.textWatermark}"</p>
+                  <p className="text-sm text-green-700">{t('textSuccess')} "{config.textWatermark}"</p>
                 </div>
               )}
             </div>
@@ -685,14 +1026,14 @@ const WatermarkResizeApp = () => {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <Settings className="w-5 h-5" />
-                Configurar
+                {t('configure')}
               </h2>
               
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Largura (px)
+                      {t('width')}
                     </label>
                     <input
                       type="number"
@@ -703,7 +1044,7 @@ const WatermarkResizeApp = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Altura (px)
+                      {t('height')}
                     </label>
                     <input
                       type="number"
@@ -723,27 +1064,27 @@ const WatermarkResizeApp = () => {
                     className="w-4 h-4 text-purple-600"
                   />
                   <label htmlFor="maintainAspect" className="text-sm text-gray-700">
-                    Manter proporção (sem sobras)
+                    {t('maintainAspect')}
                   </label>
                 </div>
                 <p className="text-xs text-gray-500 ml-6">
                   {config.maintainAspect ? 
-                    'Paisagem: altura ajustada proporcionalmente. Retrato: largura ajustada proporcionalmente.' : 
-                    'A imagem será esticada para caber exatamente nas dimensões definidas'}
+                    t('aspectHelp') : 
+                    t('aspectHelpOff')}
                 </p>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Posicionamento da Marca D'água
+                    {t('positioning')}
                   </label>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {[
-                      { value: 'top-left', label: 'Superior Esquerdo' },
-                      { value: 'top-right', label: 'Superior Direito' },
-                      { value: 'bottom-left', label: 'Inferior Esquerdo' },
-                      { value: 'bottom-right', label: 'Inferior Direito' },
-                      { value: 'bottom-center', label: 'Inferior Centro' },
-                      { value: 'center', label: 'Centro' }
+                      { value: 'top-left', label: t('positions.top-left') },
+                      { value: 'top-right', label: t('positions.top-right') },
+                      { value: 'bottom-left', label: t('positions.bottom-left') },
+                      { value: 'bottom-right', label: t('positions.bottom-right') },
+                      { value: 'bottom-center', label: t('positions.bottom-center') },
+                      { value: 'center', label: t('positions.center') }
                     ].map(pos => (
                       <label key={pos.value} className="flex items-center gap-1">
                         <input
@@ -762,7 +1103,7 @@ const WatermarkResizeApp = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Opacidade: {Math.round(config.opacity * 100)}%
+                    {t('opacity')}: {Math.round(config.opacity * 100)}%
                   </label>
                   <input
                     type="range"
@@ -777,7 +1118,7 @@ const WatermarkResizeApp = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tamanho da Marca: {config.watermarkSize}%
+                    {t('watermarkSize')}: {config.watermarkSize}%
                   </label>
                   <input
                     type="range"
@@ -800,7 +1141,7 @@ const WatermarkResizeApp = () => {
                       className="w-4 h-4 text-purple-600"
                     />
                     <label htmlFor="shadowEnabled" className="text-sm font-medium text-gray-700">
-                      Ativar Sombra na Logo
+                      {t('shadowEffects')}
                     </label>
                   </div>
 
@@ -808,7 +1149,7 @@ const WatermarkResizeApp = () => {
                     <div className="space-y-3 ml-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Desfoque: {config.shadowBlur}px
+                          {t('blur')}: {config.shadowBlur}px
                         </label>
                         <input
                           type="range"
@@ -823,7 +1164,7 @@ const WatermarkResizeApp = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Deslocamento X: {config.shadowOffsetX}px
+                            {t('offsetX')}: {config.shadowOffsetX}px
                           </label>
                           <input
                             type="range"
@@ -836,7 +1177,7 @@ const WatermarkResizeApp = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Deslocamento Y: {config.shadowOffsetY}px
+                            {t('offsetY')}: {config.shadowOffsetY}px
                           </label>
                           <input
                             type="range"
@@ -851,7 +1192,7 @@ const WatermarkResizeApp = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Opacidade da Sombra: {Math.round(config.shadowOpacity * 100)}%
+                          {t('shadowOpacity')}: {Math.round(config.shadowOpacity * 100)}%
                         </label>
                         <input
                           type="range"
@@ -866,7 +1207,7 @@ const WatermarkResizeApp = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Cor da Sombra
+                          {t('shadowColor')}
                         </label>
                         <div className="flex items-center gap-2">
                           <input
@@ -890,20 +1231,20 @@ const WatermarkResizeApp = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                 <Eye className="w-5 h-5" />
-                Pré-visualização
+                {t('preview')}
               </h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPreviewMode('landscape')}
                   className={`px-3 py-1 text-xs rounded ${previewMode === 'landscape' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                 >
-                  Paisagem
+                  {t('landscape')}
                 </button>
                 <button
                   onClick={() => setPreviewMode('portrait')}
                   className={`px-3 py-1 text-xs rounded ${previewMode === 'portrait' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'}`}
                 >
-                  Retrato
+                  {t('portrait')}
                 </button>
               </div>
             </div>
@@ -1012,13 +1353,13 @@ const WatermarkResizeApp = () => {
                           )}
                         </div>
                         <p className="text-xs text-gray-600 text-center mt-2">
-                          Base: {config.width} x {config.height}px • {previewMode === 'landscape' ? 'Paisagem' : 'Retrato'}
+                          {t('base')}: {config.width} x {config.height}px • {previewMode === 'landscape' ? t('landscape') : t('portrait')}
                           {imageDims && (
                             <span className="text-gray-500 ml-2">
-                              (Original: {imageDims.width}x{imageDims.height})
+                              ({t('original')}: {imageDims.width}x{imageDims.height})
                             </span>
                           )}
-                          {targetImage.processed && <span className="text-green-600 ml-2">✓ Processada</span>}
+                          {targetImage.processed && <span className="text-green-600 ml-2">✓ {t('processed')}</span>}
                         </p>
                       </>
                     );
@@ -1027,7 +1368,7 @@ const WatermarkResizeApp = () => {
               ) : (
                 <div className="text-center text-gray-500">
                   <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Carregue uma imagem para ver a pré-visualização</p>
+                  <p>{t('previewPlaceholder')}</p>
                 </div>
               )}
             </div>
@@ -1037,7 +1378,7 @@ const WatermarkResizeApp = () => {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-800">
-                Suas Imagens ({images.length})
+                {t('yourImages')} ({images.length})
               </h2>
               {images.length > 0 && (
                 <div className="flex gap-2">
@@ -1046,7 +1387,7 @@ const WatermarkResizeApp = () => {
                     disabled={isProcessing || images.length === 0}
                     className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? 'Processando...' : 'Processar'}
+                    {isProcessing ? t('processing') : t('process')}
                   </button>
                   <button
                     onClick={downloadAll}
@@ -1054,7 +1395,7 @@ const WatermarkResizeApp = () => {
                     className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition-colors flex items-center gap-1 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     <Download className="w-4 h-4" />
-                    Baixar ZIP
+                    {t('downloadZip')}
                   </button>
                 </div>
               )}
@@ -1064,8 +1405,8 @@ const WatermarkResizeApp = () => {
               {images.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <FileImage className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Nenhuma imagem carregada</p>
-                  <p className="text-sm">Faça upload das suas imagens</p>
+                  <p>{t('noImages')}</p>
+                  <p className="text-sm">{t('uploadImagesHint')}</p>
                 </div>
               ) : (
                 images.map((image, index) => (
@@ -1083,11 +1424,11 @@ const WatermarkResizeApp = () => {
                         {image.name}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {image.processed ? 'Processada ✓' : isProcessing ? 'Processando...' : 'Aguardando'}
+                        {image.processed ? t('processed') : isProcessing ? t('processing') : t('waiting')}
                         {imagesDimensions[image.id] && (
                           <span className="ml-2">
                             • {imagesDimensions[image.id].width}x{imagesDimensions[image.id].height}
-                            {imagesDimensions[image.id].isVertical ? ' (Retrato)' : ' (Paisagem)'}
+                            {imagesDimensions[image.id].isVertical ? ` (${t('portrait')})` : ` (${t('landscape')})`}
                           </span>
                         )}
                       </p>
@@ -1107,7 +1448,7 @@ const WatermarkResizeApp = () => {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500">
-            © 2025 PauloCunhaMKT Soluções TI • v1.1.0
+            {t('footer')}
           </p>
         </div>
       </div>
